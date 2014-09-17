@@ -275,3 +275,9 @@ config LG_OIS
 	depends on MSMB_CAMERA
 	---help---
 	Enable support for ois for LG Camera.
+
+config LG_PROXY
+    bool "Qualcomm MSM camera proxy support"
+    depends on MSMB_CAMERA
+    ---help---
+    Enable support for proxy sensor for msm camera.

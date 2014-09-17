@@ -27,6 +27,10 @@
 #define MAX_OIS_NAME_SIZE 32
 #define MAX_OIS_REG_SETTINGS 800
 
+#define MAX_PROXY_MOD_NAME_SIZE 32
+#define MAX_PROXY_NAME_SIZE 32
+#define MAX_PROXY_REG_SETTINGS 800
+
 #define MOVE_NEAR 0
 #define MOVE_FAR  1
 
@@ -89,6 +93,7 @@ enum sensor_sub_module_t {
 	SUB_MODULE_CSIPHY_3D,
 	SUB_MODULE_OIS,
 	SUB_MODULE_EXT,
+	SUB_MODULE_PROXY,
 	SUB_MODULE_MAX,
 };
 
@@ -344,6 +349,7 @@ struct msm_camera_sensor_slave_info32 {
 	char eeprom_name[32];
 	char actuator_name[32];
 	char ois_name[32];
+	char proxy_name[32];
 	char flash_name[32];
 	enum msm_sensor_camera_id_t camera_id;
 	uint16_t slave_addr;
@@ -491,6 +497,36 @@ enum msm_ois_cfg_type_t {
 };
 #endif
 
+enum msm_proxy_cfg_type_t {
+	CFG_PROXY_INIT,
+	CFG_PROXY_ON,
+	CFG_PROXY_OFF,
+	CFG_GET_PROXY,
+	CFG_PROXY_THREAD_ON,
+	CFG_PROXY_THREAD_PAUSE,
+	CFG_PROXY_THREAD_RESTART,
+	CFG_PROXY_THREAD_OFF,
+	CFG_PROXY_CAL,
+	CFG_PROXY_POWERDOWN,
+	CFG_PROXY_POWERUP,
+};
+
+#ifdef CONFIG_LG_BB
+enum msm_proxy_cfg_type_t {
+	CFG_PROXY_INIT,
+	CFG_PROXY_ON,
+	CFG_PROXY_OFF,
+	CFG_GET_PROXY,
+	CFG_PROXY_THREAD_ON,
+	CFG_PROXY_THREAD_PAUSE,
+	CFG_PROXY_THREAD_RESTART,
+	CFG_PROXY_THREAD_OFF,
+	CFG_PROXY_CAL,
+	CFG_PROXY_POWERDOWN,
+	CFG_PROXY_POWERUP,
+};
+#endif
+
 enum msm_ois_i2c_operation {
 	MSM_OIS_WRITE = 0,
 	MSM_OIS_POLL,
@@ -522,6 +558,28 @@ struct msm_ois_set_info_t {
 	void	*setting;
 #endif
 };
+
+struct msm_proxy_info_t {
+	uint16_t true_range_millimeter;
+	uint32_t measurement_time_usec;
+	uint32_t signal_rtn_rate_mcps;
+	uint32_t ambient_rtn_rate_mcps;
+	uint32_t effective_spad_rtn_count;
+	uint32_t cal_count;
+	uint32_t cal_done;
+};
+
+#ifdef CONFIG_LG_BB
+struct msm_proxy_info_t {
+	uint16_t proxy_val;
+	uint32_t proxy_conv;
+	uint32_t proxy_sig;
+	uint32_t proxy_amb;
+	uint32_t proxy_raw;
+	uint32_t cal_count;
+	uint32_t cal_done;
+};
+#endif
 
 struct msm_actuator_move_params_t {
 	int8_t dir;
@@ -600,6 +658,22 @@ struct msm_ois_cfg_data {
 		struct msm_camera_i2c_seq_reg_setting *settings;
 	} cfg;
 };
+
+struct msm_proxy_cfg_data {
+	int cfgtype;
+	union {
+		struct msm_proxy_info_t set_info;
+	} cfg;
+};
+
+#ifdef CONFIG_LG_BB
+struct msm_proxy_cfg_data {
+	int cfgtype;
+	union {
+		struct msm_proxy_info_t set_info;
+	} cfg;
+};
+#endif
 
 struct msm_actuator_set_position_t {
 	uint16_t number_of_steps;
@@ -701,6 +775,14 @@ struct sensor_init_cfg_data {
 
 #define VIDIOC_MSM_OIS_CFG \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 11, struct msm_ois_cfg_data)
+
+#define VIDIOC_MSM_PROXY_CFG \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 12, struct msm_proxy_cfg_data)
+
+#ifdef CONFIG_LG_BB
+#define VIDIOC_MSM_PROXY_CFG \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 12, struct msm_proxy_cfg_data)
+#endif
 
 #define VIDIOC_MSM_FLASH_CFG \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 13, struct msm_flash_cfg_data_t)
@@ -815,6 +897,42 @@ struct msm_ois_cfg_data32 {
 	} cfg;
 };
 
+struct msm_proxy_info_t32{
+	uint16_t proxy_val;
+	uint32_t proxy_conv;
+	uint32_t proxy_sig;
+	uint32_t proxy_amb;
+	uint32_t proxy_raw;
+	uint32_t cal_count;
+	uint32_t cal_done;
+};
+
+struct msm_proxy_cfg_data32 {
+	int cfgtype;
+	union {
+		struct msm_proxy_info_t set_info;
+	} cfg;
+};
+
+#ifdef CONFIG_LG_BB
+struct msm_proxy_info_t32{
+	uint16_t proxy_val;
+	uint32_t proxy_conv;
+	uint32_t proxy_sig;
+	uint32_t proxy_amb;
+	uint32_t proxy_raw;
+	uint32_t cal_count;
+	uint32_t cal_done;
+};
+
+struct msm_proxy_cfg_data32 {
+	int cfgtype;
+	union {
+		struct msm_proxy_info_t set_info;
+	} cfg;
+};
+#endif
+
 struct msm_flash_init_info_t32 {
 	enum msm_flash_driver_type flash_driver_type;
 	uint32_t slave_addr;
@@ -850,6 +968,14 @@ struct msm_flash_cfg_data_t32 {
 
 #define VIDIOC_MSM_OIS_CFG32 \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 11, struct msm_ois_cfg_data32)
+
+#define VIDIOC_MSM_PROXY_CFG32 \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 12, struct msm_proxy_cfg_data32)
+
+#ifdef CONFIG_LG_BB
+#define VIDIOC_MSM_PROXY_CFG32 \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 12, struct msm_proxy_cfg_data32)
+#endif
 
 #define VIDIOC_MSM_CSID_IO_CFG32 \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 5, struct csid_cfg_data32)
