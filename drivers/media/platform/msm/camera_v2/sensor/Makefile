@@ -4,10 +4,12 @@ ccflags-y += -Idrivers/media/platform/msm/camera_v2/msm_vb2
 ccflags-y += -Idrivers/media/platform/msm/camera_v2/camera
 ccflags-y += -Idrivers/media/platform/msm/camera_v2/sensor/io
 ccflags-y += -Idrivers/media/platform/msm/camera_v2/sensor/cci
+ccflags-y += -Idrivers/media/platform/msm/camera_v2/sensor/tcs
 obj-$(CONFIG_MSMB_CAMERA) += cci/ io/ csiphy/ csid/ actuator/ eeprom/ ois/ flash/ proxy/
 ccflags-y += -Idrivers/media/platform/msm/camera_v2/sensor/ois
 ccflags-y += -Idrivers/media/platform/msm/camera_v2/sensor/proxy
 obj-$(CONFIG_MSM_CAMERA_SENSOR) += msm_sensor_init.o msm_sensor_driver.o msm_sensor.o
+obj-$(CONFIG_LG_TCS) += tcs/
 
 obj-$(CONFIG_IMX234) += imx234.o
 obj-$(CONFIG_T4KA3)  += t4ka3.o

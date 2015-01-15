@@ -149,6 +149,7 @@ struct msm_camera_sensor_board_info {
 	const char *actuator_name;
 	const char *ois_name;
 	const char *proxy_name;
+	const char *tcs_name;
 	struct msm_camera_slave_info *slave_info;
 	struct msm_camera_csi_lane_params *csi_lane_params;
 	struct msm_camera_sensor_strobe_flash_data *strobe_flash_data;

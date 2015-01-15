@@ -65,6 +65,7 @@
 #define MSM_CAMERA_SUBDEV_FLASH        16
 #define MSM_CAMERA_SUBDEV_EXT          17
 #define MSM_CAMERA_SUBDEV_PROXY        18
+#define MSM_CAMERA_SUBDEV_TCS          19
 
 #define MSM_MAX_CAMERA_SENSORS  5
 
