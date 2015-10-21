@@ -618,6 +618,10 @@ Subnode properties:
 						secure mdp domain.
 			"qcom,smmu_rot_sec"	- smmu context bank device for
 						secure rotation domain.
+			"qcom,smmu_arm_mdp_unsec"	- arm smmu context bank device for
+						unsecure mdp domain.
+			"qcom,smmu_arm_mdp_sec"	- arm smmu context bank device for
+						secure mdp domain.
 - gdsc-mmagic-mdss-supply: Phandle for mmagic mdss supply regulator device node.
 - reg :			offset and length of the register set for the device.
 - reg-names :		names to refer to register sets related to this device

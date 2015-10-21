@@ -211,6 +211,12 @@ enum mdss_mdp_pipe_type {
 	MDSS_MDP_PIPE_TYPE_MAX,
 };
 
+enum mdss_smmu_version {
+	MDSS_SMMU_V1,
+	MDSS_SMMU_V2,
+	MDSS_SMMU_ARM
+};
+
 struct reg_bus_client {
 	char name[MAX_CLIENT_NAME_LEN];
 	short usecase_ndx;
@@ -226,6 +232,7 @@ struct mdss_smmu_client {
 	bool domain_attached;
 	bool handoff_pending;
 	char __iomem *mmu_base;
+	enum mdss_smmu_version smmu_type;
 };
 
 struct mdss_mdp_qseed3_lut_tbl {
@@ -464,7 +471,6 @@ struct mdss_data_type {
 
 	struct ion_client *iclient;
 	int iommu_attached;
-	struct mdss_iommu_map_type *iommu_map;
 
 	struct debug_bus *dbg_bus;
 	u32 dbg_bus_size;
