@@ -205,8 +205,6 @@ static int msm_csid_reset(struct csid_device *csid_dev)
 	if (rc <= 0) {
 		pr_err("wait_for_completion in msm_csid_reset fail rc = %d\n",
 			rc);
-		if (rc == 0)
-			rc = -ETIMEDOUT;
 	}
 	return rc;
 }
