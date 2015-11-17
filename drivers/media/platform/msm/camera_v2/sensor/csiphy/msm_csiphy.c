@@ -309,6 +309,10 @@ static int msm_csiphy_2phase_lane_config(
 		mipi_csiphy_3ph_cmn_ctrl6.data,
 		csiphybase + csiphy_dev->ctrl_reg->csiphy_3ph_reg.
 		mipi_csiphy_3ph_cmn_ctrl6.addr);
+	msm_camera_io_w(csiphy_dev->ctrl_reg->csiphy_3ph_reg.
+		mipi_csiphy_3ph_lnck_cfg1.data,
+		csiphybase + csiphy_dev->ctrl_reg->csiphy_3ph_reg.
+		mipi_csiphy_3ph_lnck_cfg1.addr);
 
 	for (i = 0, mask = 0x1; i < MAX_LANES; i++) {
 		if (!(lane_mask & mask)) {
