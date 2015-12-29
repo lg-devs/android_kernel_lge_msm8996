@@ -1880,7 +1880,6 @@ static void mdss_hw_rev_init(struct mdss_data_type *mdata)
  */
 void mdss_hw_init(struct mdss_data_type *mdata)
 {
-	int i;
 	struct mdss_mdp_pipe *vig;
 
 	mdss_hw_rev_init(mdata);
@@ -1900,10 +1899,6 @@ void mdss_hw_init(struct mdss_data_type *mdata)
 	}
 
 	vig = mdata->vig_pipes;
-
-	/* initialize csc matrix default value */
-	for (i = 0; i < mdata->nvig_pipes; i++)
-		vig[i].csc_coeff_set = MDP_CSC_ITU_R_709;
 
 	mdata->nmax_concurrent_ad_hw =
 		(mdata->mdp_rev < MDSS_MDP_HW_REV_103) ? 1 : 2;
