@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -88,7 +88,8 @@ int msm_isp_axi_create_stream(struct vfe_device *vfe_dev,
 		stream_cfg_cmd->axi_stream_handle;
 	axi_data->stream_info[i].controllable_output =
 		stream_cfg_cmd->controllable_output;
-	axi_data->stream_info[i].prev_framedrop_period = 0x7FFFFFFF;
+	axi_data->stream_info[i].activated_framedrop_period =
+		MSM_VFE_STREAM_STOP_PERIOD;
 	if (stream_cfg_cmd->controllable_output)
 		stream_cfg_cmd->frame_skip_pattern = SKIP_ALL;
 	INIT_LIST_HEAD(&axi_data->stream_info[i].request_q);
@@ -487,31 +488,31 @@ static void msm_isp_cfg_framedrop_reg(struct vfe_device *vfe_dev,
 
 	BUG_ON(0 == framedrop_period);
 	if (DUAL_VFE_AND_VFE1(stream_info, vfe_dev)) {
-		vfe0_stream_info = __dual_vfe_stream(
-				vfe_dev->common_data->dual_vfe_res,
-				stream_info, ISP_VFE0);
-		if (vfe0_stream_info) {
-			vfe_dev->hw_info->vfe_ops.axi_ops.cfg_framedrop(
-				vfe_dev->common_data->dual_vfe_res->
-				vfe_base[ISP_VFE0],
-				vfe0_stream_info, framedrop_pattern,
-				framedrop_period);
-			vfe_dev->hw_info->vfe_ops.axi_ops.cfg_framedrop(
-				vfe_dev->vfe_base, stream_info,
-				framedrop_pattern,
-				framedrop_period);
+		vfe0_stream_info = msm_isp_vfe_get_stream(
+					vfe_dev->common_data->dual_vfe_res,
+					ISP_VFE0,
+					HANDLE_TO_IDX(
+					stream_info->stream_handle));
+		vfe_dev->hw_info->vfe_ops.axi_ops.cfg_framedrop(
+			vfe_dev->common_data->dual_vfe_res->
+			vfe_base[ISP_VFE0],
+			vfe0_stream_info, framedrop_pattern,
+			framedrop_period);
+		vfe_dev->hw_info->vfe_ops.axi_ops.cfg_framedrop(
+			vfe_dev->vfe_base, stream_info,
+			framedrop_pattern,
+			framedrop_period);
 
-			stream_info->prev_framedrop_period =
-				(framedrop_period | 0x80000000);
-			vfe0_stream_info->prev_framedrop_period =
-				(framedrop_period | 0x80000000);
-		}
+			stream_info->requested_framedrop_period =
+				framedrop_period;
+			vfe0_stream_info->requested_framedrop_period =
+				framedrop_period;
+
 	} else if (RDI_OR_NOT_DUAL_VFE(vfe_dev, stream_info)) {
 		vfe_dev->hw_info->vfe_ops.axi_ops.cfg_framedrop(
 			vfe_dev->vfe_base, stream_info, framedrop_pattern,
 			framedrop_period);
-		stream_info->prev_framedrop_period =
-				(framedrop_period | 0x80000000);
+		stream_info->requested_framedrop_period = framedrop_period;
 	}
 }
 
@@ -548,30 +549,19 @@ void msm_isp_update_framedrop_reg(struct vfe_device *vfe_dev,
 		if (BURST_STREAM == stream_info->stream_type) {
 			if (0 == stream_info->runtime_num_burst_capture)
 				stream_info->current_framedrop_period =
-				MSM_VFE_STREAM_STOP_PERIOD;
+					MSM_VFE_STREAM_STOP_PERIOD;
 		}
+
+		if (stream_info->undelivered_request_cnt > 0)
+			stream_info->current_framedrop_period =
+				MSM_VFE_STREAM_STOP_PERIOD;
 
 		/*
 		 * re-configure the period pattern, only if it's not already
 		 * set to what we want
 		 */
 		if (stream_info->current_framedrop_period !=
-			stream_info->prev_framedrop_period) {
-			/*
-			 * If we previously tried to set a valid period which
-			 * did not take effect then we may have missed a reg
-			 * update, print error to indicate this condition
-			 */
-			if ((stream_info->prev_framedrop_period & 0x80000000) &&
-				(stream_info->current_framedrop_period ==
-				(stream_info->prev_framedrop_period &
-					~0x80000000)))
-				ISP_DBG("Framedop setting for %p not taken effect %x/%x, frame_src %x\n",
-					stream_info,
-					stream_info->prev_framedrop_period,
-					stream_info->current_framedrop_period,
-					frame_src);
-
+			stream_info->activated_framedrop_period) {
 			msm_isp_cfg_framedrop_reg(vfe_dev, stream_info);
 		}
 		spin_unlock_irqrestore(&stream_info->lock, flags);
@@ -2895,10 +2885,10 @@ static int msm_isp_request_frame(struct vfe_device *vfe_dev,
 	}
 	if ((frame_src == VFE_PIX_0) && !stream_info->undelivered_request_cnt &&
 		MSM_VFE_STREAM_STOP_PERIOD !=
-		stream_info->prev_framedrop_period) {
+		stream_info->activated_framedrop_period) {
 		pr_debug("%s:%d vfe %d frame_id %d prev_pattern %x stream_id %x\n",
 			__func__, __LINE__, vfe_dev->pdev->id, frame_id,
-			stream_info->prev_framedrop_period,
+			stream_info->activated_framedrop_period,
 			stream_info->stream_id);
 
 		rc = msm_isp_return_empty_buffer(vfe_dev, stream_info,
@@ -2906,10 +2896,9 @@ static int msm_isp_request_frame(struct vfe_device *vfe_dev,
 		if (rc < 0)
 			pr_err("%s:%d failed: return_empty_buffer src %d\n",
 				__func__, __LINE__, frame_src);
-		vfe_dev->hw_info->vfe_ops.axi_ops.cfg_framedrop(
-			vfe_dev->vfe_base, stream_info, 0, 0);
 		stream_info->current_framedrop_period =
 			MSM_VFE_STREAM_STOP_PERIOD;
+		msm_isp_cfg_framedrop_reg(vfe_dev, stream_info);
 		return 0;
 	}
 
