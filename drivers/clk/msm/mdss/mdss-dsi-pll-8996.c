@@ -464,7 +464,7 @@ static struct clk_lookup mdss_dsi_pllcc_8996_1[] = {
 int dsi_pll_clock_register_8996(struct platform_device *pdev,
 				struct mdss_pll_resources *pll_res)
 {
-	int rc, ndx;
+	int rc = 0, ndx;
 	struct dsi_pll_db *pdb;
 
 	if (!pdev || !pdev->dev.of_node) {
