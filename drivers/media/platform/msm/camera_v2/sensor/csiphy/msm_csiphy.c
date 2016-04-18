@@ -47,11 +47,29 @@
 #define MAX_LANES                                   4
 #define CLOCK_OFFSET                              0x700
 #define CSIPHY_SOF_DEBUG_COUNT                      2
+#define CLK_MISS_TIMER                            0xA5
 
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
 
 static struct v4l2_file_operations msm_csiphy_v4l2_subdev_fops;
+
+/* LGE_CHANGE, CST, added csiphy timer for enableing/disable irq */
+void csiphy_timer_callback(unsigned long data)
+{
+	struct csiphy_device *csiphy_dev =
+		(struct csiphy_device *) data;
+	if(atomic_read(&csiphy_dev->csiphy_timer.used)) {
+		pr_err("%s: timed out-csiphy(%p) sof_debug(%d)\n", __func__,
+			csiphy_dev, csiphy_dev->csiphy_sof_debug);
+		if (csiphy_dev->csiphy_sof_debug == SOF_DEBUG_ENABLE) {
+			disable_irq(csiphy_dev->irq->start);
+			csiphy_dev->csiphy_sof_debug = SOF_DEBUG_DISABLE;
+		}
+		atomic_set(&csiphy_dev->csiphy_timer.used, 0);
+		del_timer(&csiphy_dev->csiphy_timer.timer);
+	}
+}
 
 static void msm_csiphy_cphy_irq_config(
 	struct csiphy_device *csiphy_dev,
@@ -311,6 +329,10 @@ static int msm_csiphy_2phase_lane_config(
 		mipi_csiphy_3ph_cmn_ctrl6.data,
 		csiphybase + csiphy_dev->ctrl_reg->csiphy_3ph_reg.
 		mipi_csiphy_3ph_cmn_ctrl6.addr);
+	msm_camera_io_w(csiphy_dev->ctrl_reg->csiphy_3ph_reg.
+		mipi_csiphy_3ph_lnck_cfg1.data,
+		csiphybase + csiphy_dev->ctrl_reg->csiphy_3ph_reg.
+		mipi_csiphy_3ph_lnck_cfg1.addr);
 
 	for (i = 0, mask = 0x1; i < MAX_LANES; i++) {
 		if (!(lane_mask & mask)) {
@@ -370,11 +392,6 @@ static int msm_csiphy_2phase_lane_config(
 			msm_camera_io_w(csiphy_dev->ctrl_reg->csiphy_3ph_reg.
 				mipi_csiphy_3ph_lnck_cfg1.data, csiphybase +
 				csiphy_dev->ctrl_reg->csiphy_3ph_reg.
-				mipi_csiphy_3ph_lnck_cfg1.addr);
-
-			msm_camera_io_w(csiphy_dev->ctrl_reg->csiphy_3ph_reg.
-				mipi_csiphy_2ph_lnn_cfg4.data, csiphybase +
-				csiphy_dev->ctrl_reg->csiphy_3ph_reg.
 				mipi_csiphy_2ph_lnn_cfg4.addr + offset);
 		} else {
 			msm_camera_io_w(csiphy_dev->ctrl_reg->csiphy_3ph_reg.
@@ -383,43 +400,18 @@ static int msm_csiphy_2phase_lane_config(
 				csiphy_dev->ctrl_reg->csiphy_3ph_reg.
 				mipi_csiphy_2ph_lnn_cfg1.addr + offset);
 		}
-		if (csiphy_dev->hw_version == CSIPHY_VERSION_V342 &&
-			csiphy_params->combo_mode == 1) {
-			msm_camera_io_w(0x52,
-				csiphybase +
-				csiphy_dev->ctrl_reg->csiphy_3ph_reg.
-				mipi_csiphy_2ph_lnn_cfg5.addr + offset);
-		} else {
-			msm_camera_io_w(csiphy_dev->ctrl_reg->csiphy_3ph_reg.
-				mipi_csiphy_2ph_lnn_cfg5.data,
-				csiphybase +
-				csiphy_dev->ctrl_reg->csiphy_3ph_reg.
-				mipi_csiphy_2ph_lnn_cfg5.addr + offset);
-		}
-		if (clk_lane == 1 &&
-			csiphy_dev->hw_version == CSIPHY_VERSION_V342) {
-			msm_camera_io_w(0x1f,
-				csiphybase +
-				csiphy_dev->ctrl_reg->csiphy_3ph_reg.
-				mipi_csiphy_2ph_lnn_cfg9.addr + offset);
-		} else {
-			msm_camera_io_w(csiphy_dev->ctrl_reg->csiphy_3ph_reg.
-				mipi_csiphy_2ph_lnn_cfg9.data,
-				csiphybase +
-				csiphy_dev->ctrl_reg->csiphy_3ph_reg.
-				mipi_csiphy_2ph_lnn_cfg9.addr + offset);
-		}
+		msm_camera_io_w(csiphy_dev->ctrl_reg->csiphy_3ph_reg.
+			mipi_csiphy_2ph_lnn_cfg5.data,
+			csiphybase + csiphy_dev->ctrl_reg->csiphy_3ph_reg.
+			mipi_csiphy_2ph_lnn_cfg5.addr + offset);
+		msm_camera_io_w(csiphy_dev->ctrl_reg->csiphy_3ph_reg.
+			mipi_csiphy_2ph_lnn_cfg9.data,
+			csiphybase + csiphy_dev->ctrl_reg->csiphy_3ph_reg.
+			mipi_csiphy_2ph_lnn_cfg9.addr + offset);
 		msm_camera_io_w(csiphy_dev->ctrl_reg->csiphy_3ph_reg.
 			mipi_csiphy_2ph_lnn_test_imp.data,
 			csiphybase + csiphy_dev->ctrl_reg->csiphy_3ph_reg.
 			mipi_csiphy_2ph_lnn_test_imp.addr + offset);
-		if (csiphy_dev->hw_version == CSIPHY_VERSION_V342) {
-			msm_camera_io_w(csiphy_dev->ctrl_reg->csiphy_3ph_reg.
-				mipi_csiphy_2ph_lnn_ctrl5.data,
-				csiphybase +
-				csiphy_dev->ctrl_reg->csiphy_3ph_reg.
-				mipi_csiphy_2ph_lnn_ctrl5.addr + offset);
-		}
 		mask <<= 1;
 	}
 	if (csiphy_dev->hw_version == CSIPHY_VERSION_V342 &&
@@ -888,6 +880,14 @@ static int msm_csiphy_init(struct csiphy_device *csiphy_dev)
 		pr_err("%s: failed to vote for AHB\n", __func__);
 		return rc;
 	}
+      /* LGE_CHANGE, CST, added gdsc regulator */
+	if ( csiphy_dev->csiphy_reg &&
+		!regulator_is_enabled(csiphy_dev->csiphy_reg)) {
+		pr_err("%s: csiphy reg is either null or down \n", __func__);
+		csiphy_dev->ref_count--;
+		rc = -EINVAL;
+		goto ioremap_fail;
+	}
 
 	csiphy_dev->base = ioremap(csiphy_dev->mem->start,
 		resource_size(csiphy_dev->mem));
@@ -1111,12 +1111,18 @@ static int msm_csiphy_release(struct csiphy_device *csiphy_dev, void *arg)
 	}
 
 	if (csiphy_dev->csiphy_3phase == CSI_3PHASE_HW) {
-		msm_camera_io_w(0x0,
-			csiphy_dev->base + csiphy_dev->ctrl_reg->csiphy_3ph_reg.
-			mipi_csiphy_3ph_cmn_ctrl5.addr);
-		msm_camera_io_w(0x0,
-			csiphy_dev->base + csiphy_dev->ctrl_reg->csiphy_3ph_reg.
-			mipi_csiphy_3ph_cmn_ctrl6.addr);
+		  /* LGE_CHANGE, CST, added gdsc regulator */
+		if ( csiphy_dev->csiphy_reg &&
+			regulator_is_enabled(csiphy_dev->csiphy_reg)) {
+			msm_camera_io_w(0x0,
+				csiphy_dev->base + csiphy_dev->ctrl_reg->csiphy_3ph_reg.
+				mipi_csiphy_3ph_cmn_ctrl5.addr);
+			msm_camera_io_w(0x0,
+				csiphy_dev->base + csiphy_dev->ctrl_reg->csiphy_3ph_reg.
+				mipi_csiphy_3ph_cmn_ctrl6.addr);
+		} else {
+		       pr_err("%s: csiphy reg is either null or down \n", __func__);
+		}
 	} else	if (csiphy_dev->hw_version < CSIPHY_VERSION_V30) {
 		csiphy_dev->lane_mask[csiphy_dev->pdev->id] = 0;
 		for (i = 0; i < 4; i++)
@@ -1233,6 +1239,14 @@ static int32_t msm_csiphy_cmd(struct csiphy_device *csiphy_dev, void *arg)
 			rc = -EFAULT;
 			break;
 		}
+		/* LGE_CHANGE, CST, added csiphy timer for enableing/disable irq */
+		if(atomic_read(&csiphy_dev->csiphy_timer.used)) {
+			pr_err("%s: csiphy(%p) sof_debug(%d)", __func__,csiphy_dev,
+				csiphy_dev->csiphy_sof_debug);
+			csiphy_dev->csiphy_sof_debug = SOF_DEBUG_DISABLE;
+			atomic_set(&csiphy_dev->csiphy_timer.used, 0);
+			del_timer(&csiphy_dev->csiphy_timer.timer);
+		}
 		rc = msm_csiphy_release(csiphy_dev, &csi_lane_params);
 		break;
 	default:
@@ -1260,6 +1274,7 @@ static long msm_csiphy_subdev_ioctl(struct v4l2_subdev *sd,
 			unsigned int cmd, void *arg)
 {
 	int rc = -ENOIOCTLCMD;
+	int ret;
 	struct csiphy_device *csiphy_dev = v4l2_get_subdevdata(sd);
 	if (!csiphy_dev) {
 		pr_err("%s:%d failed\n", __func__, __LINE__);
@@ -1292,6 +1307,16 @@ static long msm_csiphy_subdev_ioctl(struct v4l2_subdev *sd,
 			break;
 		csiphy_dev->csiphy_sof_debug = SOF_DEBUG_DISABLE;
 		disable_irq(csiphy_dev->irq->start);
+		/* LGE_CHANGE, CST, added csiphy timer for enableing/disable irq */
+		if(!atomic_read(&csiphy_dev->csiphy_timer.used)) {
+			atomic_set(&csiphy_dev->csiphy_timer.used, 1);
+			pr_err("%s:Starting timer to fire in %d ms. (jiffies=%lu)\n",__func__,
+				CSIPHY_ENABLE_IRQ_TIMEOUT, jiffies);
+			ret = mod_timer(&csiphy_dev->csiphy_timer.timer,
+				jiffies + msecs_to_jiffies(CSIPHY_ENABLE_IRQ_TIMEOUT));
+			if (ret)
+				pr_err("%s: Timer has not expired yet\n", __func__);
+			}
 		break;
 	default:
 		pr_err_ratelimited("%s: command not found\n", __func__);
@@ -1550,6 +1575,10 @@ static int csiphy_probe(struct platform_device *pdev)
 		new_csiphy_dev->ctrl_reg->csiphy_reg = csiphy_v3_5;
 		new_csiphy_dev->hw_dts_version = CSIPHY_VERSION_V35;
 		new_csiphy_dev->csiphy_3phase = CSI_3PHASE_HW;
+             /* LGE_CHANGE, CST, added gdsc regulator */
+		new_csiphy_dev->csiphy_reg = regulator_get(&pdev->dev, "gdscr");
+		if (!new_csiphy_dev->csiphy_reg)
+			pr_err("%s: failed to get gdscr which is null\n", __func__);
 	} else {
 		pr_err("%s:%d, invalid hw version : 0x%x\n", __func__, __LINE__,
 		new_csiphy_dev->hw_dts_version);
@@ -1564,6 +1593,11 @@ static int csiphy_probe(struct platform_device *pdev)
 	new_csiphy_dev->msm_sd.sd.devnode->fops =
 		&msm_csiphy_v4l2_subdev_fops;
 	new_csiphy_dev->csiphy_state = CSIPHY_POWER_DOWN;
+
+	/* LGE_CHANGE, CST, added csiphy timer for enableing/disable irq */
+	atomic_set(&new_csiphy_dev->csiphy_timer.used, 0);
+	setup_timer(&new_csiphy_dev->csiphy_timer.timer,
+		csiphy_timer_callback, (unsigned long)new_csiphy_dev);
 	return 0;
 
 csiphy_no_resource:

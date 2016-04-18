@@ -824,6 +824,15 @@ void sched_set_cluster_dstate(const cpumask_t *cluster_cpus, int dstate,
 	cluster->dstate_wakeup_latency = wakeup_latency;
 }
 
+/* ADAPT_LGE_BMC */
+int
+sched_get_cpu_cstate(int cpu)
+{
+	struct rq *rq = cpu_rq(cpu);
+
+	return rq->cstate;
+}
+
 #endif /* CONFIG_SMP */
 
 #ifdef CONFIG_SCHED_HMP
@@ -5162,8 +5171,12 @@ void preempt_count_add(int val)
 	/*
 	 * Underflow?
 	 */
-	if (DEBUG_LOCKS_WARN_ON((preempt_count() < 0)))
+	if (preempt_count() < 0) {
+		printk(KERN_ERR "%s: %d < 0\n",
+				__func__, preempt_count());
+		DEBUG_LOCKS_WARN_ON(1);
 		return;
+	}
 #endif
 	__preempt_count_add(val);
 #ifdef CONFIG_DEBUG_PREEMPT
@@ -5190,8 +5203,12 @@ void preempt_count_sub(int val)
 	/*
 	 * Underflow?
 	 */
-	if (DEBUG_LOCKS_WARN_ON(val > preempt_count()))
+	if (val > preempt_count()) {
+		printk(KERN_ERR "%s: %d > %d\n",
+				__func__, val, preempt_count());
+		DEBUG_LOCKS_WARN_ON(1);
 		return;
+	}
 	/*
 	 * Is the spinlock portion underflowing?
 	 */

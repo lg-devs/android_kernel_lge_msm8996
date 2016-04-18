@@ -134,6 +134,9 @@ struct hdmi_tx_ctrl {
 
 	struct mutex mutex;
 	struct mutex tx_lock;
+#ifdef CONFIG_SLIMPORT_DYNAMIC_HPD
+	struct mutex mutex_hpd;
+#endif
 	struct list_head cable_notify_handlers;
 	struct kobject *kobj;
 	struct switch_dev sdev;

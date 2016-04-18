@@ -105,6 +105,11 @@ enum msm_sensor_power_seq_gpio_t {
 	SENSOR_GPIO_VANA,
 	SENSOR_GPIO_VDIG,
 	SENSOR_GPIO_VAF,
+	#ifdef CONFIG_LGE_CAMERA_DRIVER
+	SENSOR_GPIO_LDAF_EN,
+	SENSOR_GPIO_OIS_RESET,
+	SENSOR_GPIO_TCS_VANA,
+	#endif
 	SENSOR_GPIO_FL_EN,
 	SENSOR_GPIO_FL_NOW,
 	SENSOR_GPIO_FL_RESET,
@@ -118,6 +123,12 @@ enum msm_camera_vreg_name_t {
 	CAM_VIO,
 	CAM_VANA,
 	CAM_VAF,
+	#ifdef CONFIG_LGE_CAMERA_DRIVER
+	CAM_OISVDD,
+	CAM_OISDVDD,
+	CAM_I2C_PULL_UP,
+	CAM_TCS_VIO,
+	#endif
 	CAM_V_CUSTOM1,
 	CAM_V_CUSTOM2,
 	CAM_VREG_MAX,
@@ -164,6 +175,9 @@ enum actuator_type {
 	ACTUATOR_PIEZO,
 	ACTUATOR_HVCM,
 	ACTUATOR_BIVCM,
+	#ifdef CONFIG_LG_OIS
+	ACTUATOR_CLOSE_LOOP_HVCM,
+	#endif
 };
 
 enum msm_flash_driver_type {
@@ -258,6 +272,8 @@ struct msm_camera_sensor_slave_info {
 	char eeprom_name[32];
 	char actuator_name[32];
 	char ois_name[32];
+	char proxy_name[32];
+	char tcs_name[32];
 	char flash_name[32];
 	enum msm_sensor_camera_id_t camera_id;
 	unsigned short slave_addr;
@@ -363,6 +379,13 @@ struct region_params_t {
 	unsigned short code_per_step;
 	/* qvalue for converting float type numbers to integer format */
 	unsigned int qvalue;
+	#ifdef CONFIG_LG_OIS
+	int infinity_dac;
+	int macro_dac;
+	int dac_20;
+	int dac_40;
+	int macro_mecha_end;
+	#endif
 };
 
 struct reg_settings_t {

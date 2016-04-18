@@ -127,7 +127,11 @@ void *seemp_logk_kernel_start_record(char **buf)
 	blk->version = OBSERVER_VERSION;
 	blk->pid = current->tgid;
 	blk->tid = current->pid;
+#ifdef CONFIG_UIDGID_STRICT_TYPE_CHECKS
 	blk->uid = (current_uid()).val;
+#else
+	blk->uid = (current_uid());
+#endif
 	blk->sec = now.tv_sec;
 	blk->nsec = now.tv_nsec;
 	strlcpy(blk->appname, current->comm, TASK_COMM_LEN);
@@ -677,4 +681,3 @@ module_exit(seemp_logk_cleanup);
 
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("seemp Observer");
-

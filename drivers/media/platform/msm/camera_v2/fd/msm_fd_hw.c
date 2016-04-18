@@ -910,6 +910,8 @@ void msm_fd_hw_put(struct msm_fd_device *fd)
 		msm_camera_clk_enable(&fd->pdev->dev, fd->clk_info,
 				fd->clk, fd->clk_num, false);
 		msm_camera_regulator_enable(fd->vdd, fd->num_reg, false);
+		flush_work(&fd->work);  /* LGE_CHANGE, CST, added fd work flush */
+
 	}
 	mutex_unlock(&fd->lock);
 }

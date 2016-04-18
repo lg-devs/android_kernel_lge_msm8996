@@ -82,6 +82,7 @@
 #define TSENS_LOGS_LOG4_SHIFT     20
 #define TSENS_LOGS_LOG5_SHIFT     25
 
+#define TSENS_TM_MAX_MIN_INT_STATUS(n)		((n) + 0x10)
 /* TSENS_TM registers for 8996 */
 #define TSENS_TM_INT_EN(n)			((n) + 0x1004)
 #define TSENS_TM_CRITICAL_INT_EN		BIT(2)
@@ -841,6 +842,7 @@ struct tsens_tm_device {
 	uint32_t			tsens_num_sensor;
 	int				tsens_irq;
 	int				tsens_critical_irq;
+	int				tsens_min_max_irq;
 	void				*tsens_addr;
 	void				*tsens_calib_addr;
 	int				tsens_len;
@@ -860,6 +862,7 @@ struct tsens_tm_device {
 	struct tsens_mtc_sysfs		mtcsys;
 	spinlock_t			tsens_crit_lock;
 	spinlock_t			tsens_upp_low_lock;
+	spinlock_t			tsens_min_max_lock;
 	bool				crit_set;
 	struct tsens_dbg_counter	crit_timestamp_last_run;
 	struct tsens_dbg_counter	crit_timestamp_last_interrupt_handled;
@@ -2045,7 +2048,16 @@ static void tsens_poll(struct work_struct *work)
 				&tmdev->tsens_rslt_completion,
 				tsens_completion_timeout_hz);
 	if (!rc) {
+#ifdef CONFIG_LGE_PM
+		pr_err("TSENS critical interrupt failed and reschedule it\n");
+		/* This code is not meaningful for debugging delay issue
+		 * ,so skip to execute dump on LGE board and just remain a log.
+		*/
+		if (tsens_poll_check)
+			goto re_schedule;
+#else
 		pr_debug("Switch to polling, TSENS critical interrupt failed\n");
+#endif
 		sensor_status_addr = TSENS_TM_SN_STATUS(tmdev->tsens_addr);
 		sensor_int_mask_addr =
 			TSENS_TM_CRITICAL_INT_MASK(tmdev->tsens_addr);
@@ -2382,6 +2394,55 @@ static struct thermal_zone_device_ops tsens_tm_thermal_zone_ops = {
 	.set_trip_temp = tsens_tm_set_trip_temp,
 	.notify = tsens_tz_notify,
 };
+
+static irqreturn_t tsens_tm_min_max_irq_thread(int irq, void *data)
+{
+	struct tsens_tm_device *tm = data;
+	unsigned int i = 0, status_max = 0, status_min = 0, sensor_addr = 0;
+	unsigned int sensor_min_max_data;
+	unsigned long flags;
+	void __iomem *sensor_min_max_status_addr;
+	void __iomem *sensor_status_addr;
+
+	spin_lock_irqsave(&tm->tsens_min_max_lock, flags);
+	sensor_min_max_status_addr = TSENS_TM_MAX_MIN_INT_STATUS(tm->tsens_addr);
+	sensor_min_max_data = readl_relaxed(sensor_min_max_status_addr);
+	sensor_status_addr = TSENS_TM_SN_STATUS(tm->tsens_addr);
+	if (sensor_min_max_data & 0xffff) {
+		status_min = TSENS_TM_LOWER_INT_MASK(sensor_min_max_data);
+		while (i < 16) {
+			if (status_min & 0x1) {
+				sensor_addr = readl_relaxed(sensor_status_addr
+						+ (i * TSENS_SN_ADDR_OFFSET));
+				pr_err("Min threshold crossed on sensor:%d with status:0x%x\n", i, sensor_addr);
+			}
+			i++;
+			status_min >>= 1;
+		}
+	} else if (sensor_min_max_data & 0xffff0000) {
+		status_max = TSENS_TM_UPPER_INT_MASK(sensor_min_max_data);
+		i = 0;
+		while (i < 16) {
+			if (status_max & 0x1) {
+				sensor_addr = readl_relaxed(sensor_status_addr
+						+ (i * TSENS_SN_ADDR_OFFSET));
+				pr_err("Max threshold crossed on sensor:%d with status:0x%x\n", i, sensor_addr);
+			}
+			i++;
+			status_max >>= 1;
+		}
+	}
+	spin_unlock_irqrestore(&tm->tsens_min_max_lock, flags);
+
+	if (sensor_min_max_data) {
+		pr_err("Min/Max status read: 0x%x\n", sensor_min_max_data);
+		BUG();
+	} else {
+		pr_err("Min/Max threshold crossed but missed at the time of the handler\n");
+	}
+
+	return IRQ_HANDLED;
+}
 
 static irqreturn_t tsens_tm_critical_irq_thread(int irq, void *data)
 {
@@ -5508,6 +5569,15 @@ static int get_device_tree_data(struct platform_device *pdev,
 			rc = tmdev->tsens_critical_irq;
 			goto fail_tmdev;
 		}
+
+		tmdev->tsens_min_max_irq =
+				platform_get_irq_byname(pdev,
+						"tsens-min-max");
+		if (tmdev->tsens_min_max_irq < 0) {
+			pr_err("Invalid Min Max get irq\n");
+			rc = tmdev->tsens_min_max_irq;
+			goto fail_tmdev;
+		}
 	}
 
 	temp1_calib_offset_factor = devm_kzalloc(&pdev->dev,
@@ -5664,6 +5734,7 @@ static int tsens_tm_probe(struct platform_device *pdev)
 
 	spin_lock_init(&tmdev->tsens_crit_lock);
 	spin_lock_init(&tmdev->tsens_upp_low_lock);
+	spin_lock_init(&tmdev->tsens_min_max_lock);
 	tmdev->is_ready = true;
 
 	list_add_tail(&tmdev->list, &tsens_device_list);
@@ -5804,6 +5875,19 @@ static int tsens_thermal_zone_register(struct tsens_tm_device *tmdev)
 			goto fail;
 		} else {
 			enable_irq_wake(tmdev->tsens_critical_irq);
+		}
+
+		rc = request_irq(tmdev->tsens_min_max_irq,
+			tsens_tm_min_max_irq_thread, IRQF_TRIGGER_RISING,
+			"tsens_min_max_interrupt", tmdev);
+		if (rc < 0) {
+			pr_err("%s: request_irq FAIL: %d\n", __func__, rc);
+			for (i = 0; i < tmdev->tsens_num_sensor; i++)
+				thermal_zone_device_unregister(
+					tmdev->sensor[i].tz_dev);
+			goto fail;
+		} else {
+			enable_irq_wake(tmdev->tsens_min_max_irq);
 		}
 
 		if (tsens_poll_check) {

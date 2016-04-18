@@ -26,6 +26,7 @@
 #include <linux/uaccess.h>
 #include <linux/anon_inodes.h>
 #include <linux/sync.h>
+#include <linux/spinlock.h>
 
 #define CREATE_TRACE_POINTS
 #include "trace/sync.h"
@@ -40,6 +41,8 @@ static DEFINE_SPINLOCK(sync_timeline_list_lock);
 
 static LIST_HEAD(sync_fence_list_head);
 static DEFINE_SPINLOCK(sync_fence_list_lock);
+
+DEFINE_SPINLOCK(debug_lock);
 
 struct sync_timeline *sync_timeline_create(const struct sync_timeline_ops *ops,
 					   int size, const char *name)
@@ -137,11 +140,13 @@ static void sync_timeline_remove_pt(struct sync_pt *pt)
 void sync_timeline_signal(struct sync_timeline *obj)
 {
 	unsigned long flags;
+	unsigned long debug_flags;
 	LIST_HEAD(signaled_pts);
 	struct list_head *pos, *n;
 
 	trace_sync_timeline(obj);
 
+	spin_lock_irqsave(&debug_lock, debug_flags);
 	spin_lock_irqsave(&obj->active_list_lock, flags);
 
 	list_for_each_safe(pos, n, &obj->active_list_head) {
@@ -156,6 +161,7 @@ void sync_timeline_signal(struct sync_timeline *obj)
 	}
 
 	spin_unlock_irqrestore(&obj->active_list_lock, flags);
+	spin_unlock_irqrestore(&debug_lock, debug_flags);
 
 	list_for_each_safe(pos, n, &signaled_pts) {
 		struct sync_pt *pt =
@@ -640,6 +646,7 @@ static void sync_fence_free(struct kref *kref)
 	struct sync_fence *fence = container_of(kref, struct sync_fence, kref);
 
 	sync_fence_free_pts(fence);
+	spin_unlock_irqrestore(&debug_lock, debug_flags);
 
 	kfree(fence);
 }

@@ -17,10 +17,11 @@
 #include "camera.h"
 #include "msm_cci.h"
 #include "msm_camera_dt_util.h"
+#include <soc/qcom/lge/board_lge.h>
 
 /* Logging macro */
 #undef CDBG
-#define CDBG(fmt, args...) pr_debug(fmt, ##args)
+#define CDBG(fmt, args...) pr_err(fmt, ##args)
 
 #define SENSOR_MAX_MOUNTANGLE (360)
 
@@ -329,6 +330,130 @@ static int32_t msm_sensor_fill_ois_subdevid_by_name(
 
 	return rc;
 }
+
+static int32_t msm_sensor_fill_tcs_subdevid_by_name(
+				struct msm_sensor_ctrl_t *s_ctrl)
+{
+	int32_t rc = 0;
+	struct device_node *src_node = NULL;
+	uint32_t val = 0;
+	int32_t *tcs_subdev_id;
+	struct  msm_sensor_info_t *sensor_info;
+	struct device_node *of_node = s_ctrl->of_node;
+
+	if (!of_node)
+		return -EINVAL;
+
+	sensor_info = s_ctrl->sensordata->sensor_info;
+	tcs_subdev_id = &sensor_info->subdev_id[SUB_MODULE_TCS];
+	/*
+	 * string for ois name is valid, set sudev id to -1
+	 * and try to found new id
+	 */
+	*tcs_subdev_id = -1;
+
+	src_node = of_parse_phandle(of_node, "qcom,tcs-src", 0);
+	if (!src_node) {
+		CDBG("%s:%d src_node NULL\n", __func__, __LINE__);
+	} else {
+		rc = of_property_read_u32(src_node, "cell-index", &val);
+		CDBG("%s qcom,tcs cell index %d, rc %d\n", __func__,
+			val, rc);
+		if (rc < 0) {
+			pr_err("%s failed %d\n", __func__, __LINE__);
+			return -EINVAL;
+		}
+		*tcs_subdev_id = val;
+		of_node_put(src_node);
+		src_node = NULL;
+	}
+
+	return rc;
+}
+
+/* LGE_CHANGE_S, proxy bring_up, 2015-09-25, seonyung.kim@lge.com */
+static int32_t msm_sensor_fill_proxy_subdevid_by_name(
+				struct msm_sensor_ctrl_t *s_ctrl)
+{
+	int32_t rc = 0;
+	struct device_node *src_node = NULL;
+	uint32_t val = 0;
+	int32_t *proxy_subdev_id;
+	struct  msm_sensor_info_t *sensor_info;
+	struct device_node *of_node = s_ctrl->of_node;
+
+	if (!of_node)
+		return -EINVAL;
+
+	sensor_info = s_ctrl->sensordata->sensor_info;
+	proxy_subdev_id = &sensor_info->subdev_id[SUB_MODULE_PROXY];
+	/*
+	 * string for proxy name is valid, set sudev id to -1
+	 * and try to found new id
+	 */
+	*proxy_subdev_id = -1;
+
+	src_node = of_parse_phandle(of_node, "qcom,proxy-src", 0);
+	if (!src_node) {
+		CDBG("%s:%d src_node NULL\n", __func__, __LINE__);
+	} else {
+		rc = of_property_read_u32(src_node, "cell-index", &val);
+		CDBG("%s qcom,proxy cell index %d, rc %d\n", __func__,
+			val, rc);
+		if (rc < 0) {
+			pr_err("%s failed %d\n", __func__, __LINE__);
+			return -EINVAL;
+		}
+		*proxy_subdev_id = val;
+		of_node_put(src_node);
+		src_node = NULL;
+	}
+
+	return rc;
+}
+
+#ifdef CONFIG_LG_BB
+static int32_t msm_sensor_fill_proxy_subdevid_by_name(
+				struct msm_sensor_ctrl_t *s_ctrl)
+{
+	int32_t rc = 0;
+	struct device_node *src_node = NULL;
+	uint32_t val = 0;
+	int32_t *ois_subdev_id;
+	struct  msm_sensor_info_t *sensor_info;
+	struct device_node *of_node = s_ctrl->of_node;
+
+	if (!of_node)
+		return -EINVAL;
+
+	sensor_info = s_ctrl->sensordata->sensor_info;
+	ois_subdev_id = &sensor_info->subdev_id[SUB_MODULE_PROXY];
+	/*
+	 * string for ois name is valid, set sudev id to -1
+	 * and try to found new id
+	 */
+	*ois_subdev_id = -1;
+
+	src_node = of_parse_phandle(of_node, "qcom,proxy-src", 0);
+	if (!src_node) {
+		CDBG("%s:%d src_node NULL\n", __func__, __LINE__);
+	} else {
+		rc = of_property_read_u32(src_node, "cell-index", &val);
+		CDBG("%s qcom,proxy cell index %d, rc %d\n", __func__,
+			val, rc);
+		if (rc < 0) {
+			pr_err("%s failed %d\n", __func__, __LINE__);
+			return -EINVAL;
+		}
+		*ois_subdev_id = val;
+		of_node_put(src_node);
+		src_node = NULL;
+	}
+
+	return rc;
+}
+#endif
+/* LGE_CHANGE_E, proxy bring_up, 2015-09-25, seonyung.kim@lge.com */
 
 static int32_t msm_sensor_fill_slave_info_init_params(
 	struct msm_camera_sensor_slave_info *slave_info,
@@ -689,6 +814,12 @@ int32_t msm_sensor_driver_probe(void *setting,
 		strlcpy(slave_info->ois_name, slave_info32->ois_name,
 			sizeof(slave_info->ois_name));
 
+		strlcpy(slave_info->proxy_name, slave_info32->proxy_name,
+			sizeof(slave_info->proxy_name));
+
+		strlcpy(slave_info->tcs_name, slave_info32->tcs_name,
+			sizeof(slave_info->tcs_name));
+
 		strlcpy(slave_info->flash_name, slave_info32->flash_name,
 			sizeof(slave_info->flash_name));
 
@@ -872,6 +1003,8 @@ CSID_TG:
 	s_ctrl->sensordata->eeprom_name = slave_info->eeprom_name;
 	s_ctrl->sensordata->actuator_name = slave_info->actuator_name;
 	s_ctrl->sensordata->ois_name = slave_info->ois_name;
+	s_ctrl->sensordata->proxy_name = slave_info->proxy_name;
+	s_ctrl->sensordata->tcs_name = slave_info->tcs_name;
 	/*
 	 * Update eeporm subdevice Id by input eeprom name
 	 */
@@ -894,6 +1027,30 @@ CSID_TG:
 		pr_err("%s failed %d\n", __func__, __LINE__);
 		goto free_camera_info;
 	}
+
+	rc = msm_sensor_fill_tcs_subdevid_by_name(s_ctrl);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		goto free_camera_info;
+	}
+
+/* LGE_CHANGE_S, proxy bring_up, 2015-09-25, seonyung.kim@lge.com */
+	rc = msm_sensor_fill_proxy_subdevid_by_name(s_ctrl);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		goto free_camera_info;
+	}
+
+#ifdef CONFIG_LG_BB
+	rc = msm_sensor_fill_proxy_subdevid_by_name(s_ctrl);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		goto free_camera_info;
+	}
+#endif
+/* LGE_CHANGE_E, proxy bring_up, 2015-09-25, seonyung.kim@lge.com */
+
+
 
 	/* Power up and probe sensor */
 	rc = s_ctrl->func_tbl->sensor_power_up(s_ctrl);
@@ -1337,6 +1494,28 @@ static int __init msm_sensor_driver_init(void)
 {
 	int32_t rc = 0;
 
+#ifdef CONFIG_LGE_CAMERA_DRIVER
+	int32_t rev = 0;
+
+	//QCT work around patch for QUP i2c camera
+	CDBG("\n msm_sensor_driver_init Enter\n");
+	rc = platform_driver_register(&msm_sensor_platform_driver);
+	if (rc) {
+		pr_err("platform_driver_register failed\n");
+	}
+
+	rev = lge_get_board_revno();
+	pr_err("%s:HW rev = %d\n", __func__, rev);
+
+	if (rev >= 5) {
+		//QUP I2C Camera device add (applicable from HW_REV_A)
+		pr_err("%s: i2c_add_driver()\n", __func__);
+		rc = i2c_add_driver(&msm_sensor_driver_i2c);
+		if (rc) {
+			pr_err("i2c_add_driver failed\n");
+		}
+	}
+#else //QCT Original
 	CDBG("%s Enter\n", __func__);
 	rc = platform_driver_register(&msm_sensor_platform_driver);
 	if (rc)
