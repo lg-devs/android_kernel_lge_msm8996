@@ -135,7 +135,7 @@ void mdss_dsi_ctrl_init(struct device *ctrl_dev,
 	}
 }
 
-static void mdss_dsi_set_reg(struct mdss_dsi_ctrl_pdata *ctrl, int off,
+void mdss_dsi_set_reg(struct mdss_dsi_ctrl_pdata *ctrl, int off,
 						u32 mask, u32 val)
 {
 	u32 data;
@@ -2964,6 +2964,10 @@ static bool mdss_dsi_clk_status(struct mdss_dsi_ctrl_pdata *ctrl)
 
 	if (status & 0x10000) { /* DSI_CLK_PLL_UNLOCKED */
 		MIPI_OUTP(base + 0x0120, status);
+		/* If PLL unlock is masked, do not report error */
+		if (MIPI_INP(base + 0x10c) & BIT(28))
+			return false;
+
 		dsi_send_events(ctrl, DSI_EV_PLL_UNLOCKED, 0);
 		pr_err("%s: status=%x\n", __func__, status);
 		ret = true;
