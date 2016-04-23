@@ -38,7 +38,15 @@ static uint8_t msm_debug;
 static struct v4l2_device *msm_v4l2_dev;
 static struct list_head    ordered_sd_list;
 
+static struct pm_qos_request msm_v4l2_pm_qos_request;
+
 static struct msm_queue_head *msm_session_q;
+
+/* This variable represent daemon status
+ * true = daemon present (default state)
+ * false = daemon is NOT present
+ */
+bool is_daemon_status = true;
 
 /* config node envent queue */
 static struct v4l2_fh  *msm_eventq;
@@ -220,6 +228,25 @@ static inline bool msm_event_subscribed(
 		if (sev->type == type && sev->id == id)
 			return true;
 	return false;
+}
+
+static void msm_pm_qos_add_request(void)
+{
+	pr_info("%s: add request", __func__);
+	pm_qos_add_request(&msm_v4l2_pm_qos_request, PM_QOS_CPU_DMA_LATENCY,
+	PM_QOS_DEFAULT_VALUE);
+}
+
+static void msm_pm_qos_remove_request(void)
+{
+	pr_info("%s: remove request", __func__);
+	pm_qos_remove_request(&msm_v4l2_pm_qos_request);
+}
+
+void msm_pm_qos_update_request(int val)
+{
+	pr_info("%s: update request %d", __func__, val);
+	pm_qos_update_request(&msm_v4l2_pm_qos_request, val);
 }
 
 struct msm_session *msm_session_find(unsigned int session_id)
@@ -643,6 +670,12 @@ static long msm_private_ioctl(struct file *file, void *fh,
 	unsigned long spin_flags = 0;
 	struct msm_sd_subdev *msm_sd;
 
+	if (cmd == MSM_CAM_V4L2_IOCTL_DAEMON_DISABLED) {
+		is_daemon_status = false;
+		return 0;
+	}
+
+	memset(&event, 0, sizeof(struct v4l2_event));
 	session_id = event_data->session_id;
 	stream_id = event_data->stream_id;
 
@@ -937,6 +970,9 @@ static int msm_close(struct file *filep)
 		list_for_each_entry(msm_sd, &ordered_sd_list, list)
 			__msm_sd_close_subdevs(msm_sd, &sd_close);
 
+	/* remove msm_v4l2_pm_qos_request */
+	msm_pm_qos_remove_request();
+
 	/* send v4l2_event to HAL next*/
 	msm_queue_traverse_action(msm_session_q, struct msm_session, list,
 		__msm_close_destry_session_notify_apps, NULL);
@@ -992,6 +1028,9 @@ static int msm_open(struct file *filep)
 	spin_lock_irqsave(&msm_eventq_lock, flags);
 	msm_eventq = filep->private_data;
 	spin_unlock_irqrestore(&msm_eventq_lock, flags);
+
+	/* register msm_v4l2_pm_qos_request */
+	msm_pm_qos_add_request();
 
 	return rc;
 }
