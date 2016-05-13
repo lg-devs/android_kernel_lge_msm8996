@@ -1211,7 +1211,7 @@ static void msm_hs_set_termios(struct uart_port *uport,
 	if (c_cflag & CRTSCTS) {
 		data |= UARTDM_MR1_CTS_CTL_BMSK;
 		data |= UARTDM_MR1_RX_RDY_CTL_BMSK;
-		msm_uport->flow_control = true;
+		msm_uport->flow_control = false;
 	}
 	msm_hs_write(uport, UART_DM_MR1, data);
 
@@ -1648,6 +1648,14 @@ static void msm_serial_hs_rx_work(struct kthread_work *work)
 
 	spin_lock_irqsave(&uport->lock, flags);
 
+	/* Make sure the UART is ready when RX triggered. */
+	if (NULL == tty) {
+		MSM_HS_WARN("%s(): invalid tty", __func__);
+		spin_unlock_irqrestore(&uport->lock, flags);
+		msm_hs_resource_unvote(msm_uport);
+		return;
+	}
+
 	/*
 	 * Process all pending descs or if nothing is
 	 * queued - called from termios
@@ -1994,9 +2002,9 @@ void msm_hs_set_mctrl_locked(struct uart_port *uport,
 	set_rts = TIOCM_RTS & mctrl ? 0 : 1;
 
 	if (set_rts)
-		msm_hs_disable_flow_control(uport, false);
+		msm_hs_disable_flow_control(uport, true);
 	else
-		msm_hs_enable_flow_control(uport, false);
+		msm_hs_enable_flow_control(uport, true);
 }
 
 void msm_hs_set_mctrl(struct uart_port *uport,
@@ -2333,6 +2341,22 @@ exit_request_clock_on:
 	return ret;
 }
 EXPORT_SYMBOL(msm_hs_request_clock_on);
+
+void msm_hs_set_clock(int port_index, int on)
+{
+	struct uart_port *msm_uport = msm_hs_get_uart_port(port_index);
+
+	//MSM_HS_INFO("%s /dev/ttyHS%d clock: %s\n", __func__, port_index, on ? "ON" : "OFF");
+
+	if (on) {
+		msm_hs_request_clock_on(msm_uport);
+		msm_hs_set_mctrl(msm_uport, TIOCM_RTS);
+	} else {
+		msm_hs_set_mctrl(msm_uport, 0);
+		msm_hs_request_clock_off(msm_uport);
+	}
+}
+EXPORT_SYMBOL(msm_hs_set_clock);
 
 static irqreturn_t msm_hs_wakeup_isr(int irq, void *dev)
 {
