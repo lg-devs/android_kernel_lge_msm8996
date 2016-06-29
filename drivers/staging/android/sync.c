@@ -26,6 +26,7 @@
 #include <linux/uaccess.h>
 #include <linux/anon_inodes.h>
 #include <linux/sync.h>
+#include <linux/spinlock.h>
 
 #define CREATE_TRACE_POINTS
 #include "trace/sync.h"
@@ -40,6 +41,8 @@ static DEFINE_SPINLOCK(sync_timeline_list_lock);
 
 static LIST_HEAD(sync_fence_list_head);
 static DEFINE_SPINLOCK(sync_fence_list_lock);
+
+DEFINE_SPINLOCK(debug_lock);
 
 struct sync_timeline *sync_timeline_create(const struct sync_timeline_ops *ops,
 					   int size, const char *name)
@@ -137,6 +140,7 @@ static void sync_timeline_remove_pt(struct sync_pt *pt)
 void sync_timeline_signal(struct sync_timeline *obj)
 {
 	unsigned long flags;
+	unsigned long debug_flags;
 	LIST_HEAD(signaled_pts);
 	struct list_head *pos, *n;
 

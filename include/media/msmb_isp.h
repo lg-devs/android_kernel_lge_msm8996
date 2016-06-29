@@ -31,4 +31,3 @@ struct msm_isp_event_data32 {
 #endif
 
 #endif
-

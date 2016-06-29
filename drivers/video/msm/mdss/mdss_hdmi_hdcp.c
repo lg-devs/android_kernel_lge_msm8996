@@ -245,6 +245,7 @@ static int hdcp_scm_call(struct scm_hdcp_req *req, u32 *resp)
 	return ret;
 }
 
+#define LGE_HDCP_AHB_TIMEOUT
 static int hdmi_hdcp_authentication_part1(struct hdmi_hdcp_ctrl *hdcp_ctrl)
 {
 	int rc;
@@ -506,7 +507,9 @@ static int hdmi_hdcp_authentication_part1(struct hdmi_hdcp_ctrl *hdcp_ctrl)
 		msleep(200);
 		stale_an = false;
 	}
-
+#ifdef LGE_HDCP_AHB_TIMEOUT
+	msleep(200);
+#endif
 	/* Read An0 and An1 */
 	link0_an_0 = DSS_REG_R(io, HDMI_HDCP_RCVPORT_DATA5);
 	link0_an_1 = DSS_REG_R(io, HDMI_HDCP_RCVPORT_DATA6);
@@ -1343,6 +1346,7 @@ int hdmi_hdcp_authenticate(void *input)
 	return 0;
 } /* hdmi_hdcp_authenticate */
 
+#define QCT_REMOVE_LEGACY_CODE 0
 int hdmi_hdcp_reauthenticate(void *input)
 {
 	struct hdmi_hdcp_ctrl *hdcp_ctrl = (struct hdmi_hdcp_ctrl *)input;
@@ -1696,4 +1700,3 @@ struct hdmi_hdcp_ops *hdmi_hdcp_start(void *input)
 {
 	return ((struct hdmi_hdcp_ctrl *)input)->ops;
 }
-

@@ -289,7 +289,8 @@ static int32_t msm_isp_stats_configure(struct vfe_device *vfe_dev,
 		if (rc < 0) {
 			pr_err("%s:%d failed: stats buf divert rc %d\n",
 				__func__, __LINE__, rc);
-			result = rc;
+			if (0 == result)
+				result = rc;
 		}
 	}
 	if (is_composite && comp_stats_type_mask) {

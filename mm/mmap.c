@@ -1263,6 +1263,12 @@ static inline int mlock_future_check(struct mm_struct *mm,
 	return 0;
 }
 
+#define APP_SETTING_BIT 30
+
+extern void set_app_setting_bit(uint32_t bit);
+extern char *lib_names[];
+extern unsigned int lib_name_entries;
+
 /*
  * The caller must hold down_write(&current->mm->mmap_sem).
  */
@@ -1275,6 +1281,32 @@ unsigned long do_mmap_pgoff(struct file *file, unsigned long addr,
 	vm_flags_t vm_flags;
 
 	*populate = 0;
+	if (file && file->f_path.dentry) {
+		const char *name = file->f_path.dentry->d_name.name;
+		bool found = false;
+		int i;
+
+		for (i = 0; i < lib_name_entries; i++) {
+			if (unlikely(!strcmp(name, lib_names[i]))) {
+				found = true;
+				break;
+			}
+		}
+		if (found) {
+			preempt_disable();
+			trace_printk("DEBUG: %s %s mmap'ed current %p pid %d\n",
+				__func__, name, current, current->pid);
+			set_app_setting_bit(APP_SETTING_BIT);
+			/* This will take care of child processes as well */
+			mm->app_setting = 1;
+			preempt_enable();
+		}
+	}
+
+#ifdef CONFIG_SDCARD_FS_ANDROID_M
+	while (file && (file->f_mode & FMODE_NOMAPPABLE))
+		file = file->f_op->get_lower_file(file);
+#endif
 
 #ifdef CONFIG_MSM_APP_SETTINGS
 	if (use_app_setting)

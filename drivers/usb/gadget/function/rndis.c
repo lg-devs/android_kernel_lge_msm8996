@@ -1246,7 +1246,12 @@ static int rndis_proc_show(struct seq_file *m, void *v)
 			 (param->media_state) ? 0 : param->speed*100,
 			 (param->media_state) ? "disconnected" : "connected",
 			 param->vendorID, param->vendorDescr,
-			 param->dev ? param->max_pkt_per_xfer *
+#ifdef CONFIG_LGE_USB_G_ANDROID
+			 !param->dev ? 0:
+#else
+			 param->dev ?
+#endif
+			 param->max_pkt_per_xfer *
 				 (param->dev->mtu + sizeof(struct ethhdr) +
 				 sizeof(struct rndis_packet_msg_type) + 22) : 0,
 			 rndis_ul_max_xfer_size_rcvd,
@@ -1369,4 +1374,3 @@ void rndis_exit(void)
 	}
 #endif
 }
-

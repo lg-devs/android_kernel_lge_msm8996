@@ -258,4 +258,3 @@ unsigned long measure_get_rate(struct clk *c);
 	}; \
 
 #endif /* __ARCH_ARM_MACH_MSM_CLOCK_LOCAL_2_H */
-

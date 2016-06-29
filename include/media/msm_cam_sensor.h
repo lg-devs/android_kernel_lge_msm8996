@@ -30,6 +30,8 @@ struct msm_camera_sensor_slave_info32 {
 	char eeprom_name[32];
 	char actuator_name[32];
 	char ois_name[32];
+	char proxy_name[32];
+	char tcs_name[32];
 	char flash_name[32];
 	enum msm_sensor_camera_id_t camera_id;
 	uint16_t slave_addr;
@@ -207,6 +209,10 @@ struct msm_ois_params_t32 {
 
 struct msm_ois_set_info_t32 {
 	struct msm_ois_params_t32 ois_params;
+#ifdef CONFIG_LG_OIS
+	compat_uptr_t ois_info;
+	compat_uptr_t setting;
+#endif
 };
 
 struct msm_ois_cfg_data32 {
@@ -216,6 +222,44 @@ struct msm_ois_cfg_data32 {
 		compat_uptr_t settings;
 	} cfg;
 };
+
+/* LGE_CHANGE_S, proxy bring_up, 2015-09-25, seonyung.kim@lge.com */
+struct msm_proxy_info_t32{
+	uint16_t proxy_val;
+	uint32_t proxy_conv;
+	uint32_t proxy_sig;
+	uint32_t proxy_amb;
+	uint32_t proxy_raw;
+	uint32_t cal_count;
+	uint32_t cal_done;
+};
+
+struct msm_proxy_cfg_data32 {
+	int cfgtype;
+	union {
+		struct msm_proxy_info_t set_info;
+	} cfg;
+};
+
+#ifdef CONFIG_LG_BB
+struct msm_proxy_info_t32{
+	uint16_t proxy_val;
+	uint32_t proxy_conv;
+	uint32_t proxy_sig;
+	uint32_t proxy_amb;
+	uint32_t proxy_raw;
+	uint32_t cal_count;
+	uint32_t cal_done;
+};
+
+struct msm_proxy_cfg_data32 {
+	int cfgtype;
+	union {
+		struct msm_proxy_info_t set_info;
+	} cfg;
+};
+#endif
+/* LGE_CHANGE_E, proxy bring_up, 2015-09-25, seonyung.kim@lge.com */
 
 struct msm_flash_init_info_t32 {
 	enum msm_flash_driver_type flash_driver_type;
@@ -253,12 +297,27 @@ struct msm_flash_cfg_data_t32 {
 #define VIDIOC_MSM_OIS_CFG32 \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 11, struct msm_ois_cfg_data32)
 
+/* LGE_CHANGE_S, proxy bring_up, 2015-09-25, seonyung.kim@lge.com */
+#define VIDIOC_MSM_PROXY_CFG32 \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 12, struct msm_proxy_cfg_data32)
+
+#ifdef CONFIG_LG_BB
+#define VIDIOC_MSM_PROXY_CFG32 \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 12, struct msm_proxy_cfg_data32)
+#endif
+/* LGE_CHANGE_E, proxy bring_up, 2015-09-25, seonyung.kim@lge.com */
+
 #define VIDIOC_MSM_CSID_IO_CFG32 \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 5, struct csid_cfg_data32)
 
 #define VIDIOC_MSM_FLASH_CFG32 \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 13, struct msm_flash_cfg_data_t32)
-#endif
+
+/* LGE_CHANGE_S, tcs, 2015-01-14, booil.park@lge.com */
+#define VIDIOC_MSM_TCS_CFG32 \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 14, struct msm_tcs_cfg_data32)
+/* LGE_CHANGE_E, tcs, 2015-01-14, booil.park@lge.com */
 
 #endif
 
+#endif

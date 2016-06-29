@@ -424,6 +424,7 @@ unlock_and_exit:
 
 static void cpe_create_worker_thread(struct cpe_info *t_info)
 {
+	pr_debug("%s:\n", __func__);
 	INIT_LIST_HEAD(&t_info->main_queue);
 	init_completion(&t_info->cmd_complete);
 	init_completion(&t_info->thread_comp);
@@ -1848,6 +1849,16 @@ static enum cpe_svc_result __cpe_svc_shutdown(void *cpe_handle)
 	cpe_cleanup_worker_thread(t_info);
 	t_info->cpe_process_command(&kill_cmd);
 
+	return rc;
+}
+
+enum cpe_svc_result cpe_svc_shutdown(void *cpe_handle)
+{
+	enum cpe_svc_result rc = CPE_SVC_SUCCESS;
+
+	CPE_SVC_GRAB_LOCK(&cpe_d.cpe_api_mutex, "cpe_api");
+	rc = __cpe_svc_shutdown(cpe_handle);
+	CPE_SVC_REL_LOCK(&cpe_d.cpe_api_mutex, "cpe_api");
 	return rc;
 }
 
