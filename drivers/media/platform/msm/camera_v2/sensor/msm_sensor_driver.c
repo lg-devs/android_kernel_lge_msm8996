@@ -1525,6 +1525,8 @@ static int __init msm_sensor_driver_init(void)
 	if (rc)
 		pr_err("%s i2c_add_driver failed rc = %d",  __func__, rc);
 
+#endif
+
 	return rc;
 }
 

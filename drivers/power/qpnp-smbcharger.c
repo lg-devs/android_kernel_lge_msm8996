@@ -7532,6 +7532,9 @@ static irqreturn_t chg_hot_handler(int irq, void *_chip)
 static irqreturn_t chg_term_handler(int irq, void *_chip)
 {
 	struct smbchg_chip *chip = _chip;
+	int rc;
+	u8 reg = 0;
+	bool terminated = false;
 
 	pr_smb(PR_INTERRUPT, "tcc triggered\n");
 #ifdef CONFIG_LGE_PM_PARALLEL_CHARGING
@@ -9621,7 +9624,11 @@ static int smbchg_probe(struct spmi_device *spmi)
 
 	chip->hw_aicl_rerun_disable_votable = create_votable(&spmi->dev,
 			"SMBCHG: hwaicl_disable",
+#ifdef CONFIG_LGE_PM
+			VOTE_SET_ANY, NUM_HW_AICL_DISABLE_VOTERS, 0, 0,
+#else
 			VOTE_SET_ANY, NUM_HW_AICL_DISABLE_VOTERS, 0,
+#endif
 			smbchg_hw_aicl_rerun_disable_cb);
 	if (IS_ERR(chip->hw_aicl_rerun_disable_votable))
 		return PTR_ERR(chip->hw_aicl_rerun_disable_votable);
@@ -9629,13 +9636,21 @@ static int smbchg_probe(struct spmi_device *spmi)
 	chip->hw_aicl_rerun_enable_indirect_votable = create_votable(&spmi->dev,
 			"SMBCHG: hwaicl_enable_indirect",
 			VOTE_SET_ANY, NUM_HW_AICL_RERUN_ENABLE_INDIRECT_VOTERS,
+#ifdef CONFIG_LGE_PM
+			0, 0, smbchg_hw_aicl_rerun_enable_indirect_cb);
+#else
 			0, smbchg_hw_aicl_rerun_enable_indirect_cb);
+#endif
 	if (IS_ERR(chip->hw_aicl_rerun_enable_indirect_votable))
 		return PTR_ERR(chip->hw_aicl_rerun_enable_indirect_votable);
 
 	chip->aicl_deglitch_short_votable = create_votable(&spmi->dev,
 			"SMBCHG: hwaicl_short_deglitch",
+#ifdef CONFIG_LGE_PM
+			VOTE_SET_ANY, NUM_HW_SHORT_DEGLITCH_VOTERS, 0, 0,
+#else
 			VOTE_SET_ANY, NUM_HW_SHORT_DEGLITCH_VOTERS, 0,
+#endif
 			smbchg_aicl_deglitch_config_cb);
 	if (IS_ERR(chip->aicl_deglitch_short_votable))
 		return PTR_ERR(chip->aicl_deglitch_short_votable);

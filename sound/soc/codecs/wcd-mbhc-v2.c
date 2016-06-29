@@ -29,7 +29,6 @@
 #include <sound/jack.h>
 #include "wcd-mbhc-v2.h"
 #include "wcdcal-hwdep.h"
-#include <linux/debugfs.h>
 
 #define WCD_MBHC_JACK_MASK (SND_JACK_HEADSET | SND_JACK_OC_HPHL | \
 			   SND_JACK_OC_HPHR | SND_JACK_LINEOUT | \
@@ -145,11 +144,7 @@ static void wcd_mbhc_jack_report(struct wcd_mbhc *mbhc,
 #ifdef CONFIG_MACH_LGE
 	pr_debug("%s: status:0x%x, mask:0x%x\n", __func__, status, mask);
 
-	if(status & (SND_JACK_OC_HPHL | SND_JACK_OC_HPHR))
-		pr_err("[LGE MBHC] HPH OCP IRQ(0x%x) is reported.\n", status);
-
-	if ((mask == WCD_MBHC_JACK_MASK) &&
-	    !(status & (SND_JACK_OC_HPHL | SND_JACK_OC_HPHR)))
+	if (mask == WCD_MBHC_JACK_MASK)
 		switch_set_state(&mbhc->sdev, lge_set_switch_device(mbhc, status));
 #endif
 }
@@ -322,6 +317,7 @@ static int wcd_event_notify(struct notifier_block *self, unsigned long val,
 	struct snd_soc_codec *codec = mbhc->codec;
 	bool micbias2 = false;
 	bool micbias1 = false;
+	u8 fsm_en;
 
 	pr_debug("%s: event %s (%d)\n", __func__,
 		 wcd_mbhc_get_event_string(event), event);
@@ -362,7 +358,12 @@ static int wcd_event_notify(struct notifier_block *self, unsigned long val,
 					false);
 out_micb_en:
 		/* Disable current source if micbias enabled */
-		if (!mbhc->mbhc_cb->mbhc_micbias_control) {
+		if (mbhc->mbhc_cb->mbhc_micbias_control) {
+			WCD_MBHC_REG_READ(WCD_MBHC_FSM_EN, fsm_en);
+			if (fsm_en)
+				WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL,
+							 0);
+		} else {
 			mbhc->is_hs_recording = true;
 			wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_MB);
 		}
@@ -371,6 +372,18 @@ out_micb_en:
 			mbhc->mbhc_cb->set_cap_mode(codec, micbias1, true);
 		break;
 	case WCD_EVENT_PRE_MICBIAS_2_OFF:
+		/*
+		 * Before MICBIAS_2 is turned off, if FSM is enabled,
+		 * make sure current source is enabled so as to detect
+		 * button press/release events
+		 */
+		if (mbhc->mbhc_cb->mbhc_micbias_control &&
+		    !mbhc->micbias_enable) {
+			WCD_MBHC_REG_READ(WCD_MBHC_FSM_EN, fsm_en);
+			if (fsm_en)
+				WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL,
+							 3);
+		}
 		break;
 	/* MICBIAS usage change */
 	case WCD_EVENT_POST_DAPM_MICBIAS_2_OFF:
@@ -649,9 +662,6 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 		mbhc->zl = mbhc->zr = 0;
 		pr_debug("%s: Reporting removal %d(%x)\n", __func__,
 			 jack_type, mbhc->hph_status);
-		pr_info("[LGE MBHC] %s cable is Removed. jack_type=%x\n",
-					(jack_type-1)?"4 Pin":"3 Pin",
-					jack_type);
 		wcd_mbhc_jack_report(mbhc, &mbhc->headset_jack,
 				mbhc->hph_status, WCD_MBHC_JACK_MASK);
 		wcd_mbhc_set_and_turnoff_hph_padac(mbhc);
@@ -918,8 +928,6 @@ static void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
 			/* Disable HW FSM and current source */
 			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 0);
 			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 0);
-			mbhc->mbhc_cb->mbhc_micbias_control(mbhc->codec,
-							MICB_PULLUP_DISABLE);
 			/* Setup for insertion detection */
 			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ELECT_DETECTION_TYPE,
 						 1);
@@ -1083,6 +1091,10 @@ static bool wcd_is_special_headset(struct wcd_mbhc *mbhc)
 static void wcd_mbhc_update_fsm_source(struct wcd_mbhc *mbhc,
 				       enum wcd_mbhc_plug_type plug_type)
 {
+	bool micbias2;
+
+	micbias2 = mbhc->mbhc_cb->micbias_enable_status(mbhc,
+							MIC_BIAS_2);
 	switch (plug_type) {
 	case MBHC_PLUG_TYPE_HEADPHONE:
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 3);
@@ -1427,7 +1439,7 @@ correct_plug_type:
 				      MBHC_PLUG_TYPE_ANC_HEADPHONE)) &&
 				    !wcd_swch_level_remove(mbhc) &&
 				    !mbhc->btn_press_intr) {
-					pr_info("[LGE MBHC] %s: cable is headset\n",
+					pr_info("[LGE MBHC] %s: cable is %sheadset\n",
 						__func__,
 						((spl_hs_count ==
 							WCD_MBHC_SPL_HS_CNT) ?
@@ -1624,8 +1636,6 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 		/* Disable HW FSM */
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 0);
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 0);
-		mbhc->mbhc_cb->mbhc_micbias_control(mbhc->codec,
-						MICB_PULLUP_DISABLE);
 		if (mbhc->mbhc_cb->mbhc_common_micb_ctrl)
 			mbhc->mbhc_cb->mbhc_common_micb_ctrl(codec,
 					MBHC_COMMON_MICB_TAIL_CURR, false);
@@ -2095,9 +2105,9 @@ static irqreturn_t wcd_mbhc_release_handler(int irq, void *data)
 			} else {
 				pr_debug("%s: Reporting btn press\n",
 					 __func__);
-			pr_info("[LGE MBHC] Short Button : %s is pressed.\n",
-						mbhc->buttons_pressed==0x800000?"Volume Down":
-						button_name[(mbhc->buttons_pressed>>24)*-1/2+2]);
+				pr_info("[LGE MBHC] Short Button : %s is pressed.\n",
+						     mbhc->buttons_pressed==0x800000?"Volume Down":
+						     button_name[(mbhc->buttons_pressed>>24)*-1/2+2]);
 				wcd_mbhc_jack_report(mbhc,
 						     &mbhc->button_jack,
 						     mbhc->buttons_pressed,
@@ -2210,6 +2220,9 @@ static int wcd_mbhc_initialise(struct wcd_mbhc *mbhc)
 	/* Button Debounce set to 16ms */
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_DBNC, 2);
 
+	/* Enable micbias ramp */
+	if (mbhc->mbhc_cb->mbhc_micb_ramp_control)
+		mbhc->mbhc_cb->mbhc_micb_ramp_control(codec, true);
 	/* enable bias */
 	mbhc->mbhc_cb->mbhc_bias(codec, true);
 	/* enable MBHC clock */
@@ -2430,96 +2443,6 @@ void wcd_mbhc_stop(struct wcd_mbhc *mbhc)
 }
 EXPORT_SYMBOL(wcd_mbhc_stop);
 
-#ifdef CONFIG_DEBUG_FS
-struct wcd_mbhc *debugMbhc;
-
-static struct dentry *debugfs_mbhc_dent;
-static struct dentry *debugfs_mic_type;
-static struct dentry *debugfs_r_imped;
-static struct dentry *debugfs_headset_type;
-static struct dentry *debugfs_status;
-
-static int mbhc_debug_open(struct inode *inode, struct file *file)
-{
-	file->private_data = inode->i_private;
-	return 0;
-}
-static char* mbhc_debug_get_current_plug(u8 current_plug)
-{
-	switch(current_plug)
-	{
-		case MBHC_PLUG_TYPE_NONE:
-			return "None";
-			break;
-		case MBHC_PLUG_TYPE_HEADSET:
-			return "HEADSET";
-			break;
-		case MBHC_PLUG_TYPE_HEADPHONE:
-			return "HEADPHONE";
-			break;
-		case MBHC_PLUG_TYPE_HIGH_HPH:
-			return "HIGH_HPH";
-			break;
-		case MBHC_PLUG_TYPE_GND_MIC_SWAP:
-			return "GND_MIC_SWAP";
-			break;
-		default:
-			return "Invalid Type";
-			break;
-	}
-	return "None";
-
-}
-static ssize_t mbhc_debug_read(struct file *file, char __user *ubuf,
-				size_t count, loff_t *ppos)
-{
-	int size = 1024;
-	char lbuf[size];
-	char *access_str = file->private_data;
-	ssize_t ret_cnt = 0;
-	enum wcd_mbhc_register_function mbhc_reg;
-	s16 reg_value = 0;
-	struct wcd_mbhc *mbhc = debugMbhc;
-
-	if (*ppos < 0 || !count)
-		return -EINVAL;
-
-	if (!strcmp(access_str, "mic_type")) {
-		scnprintf(lbuf,size,"%s\n",mbhc_debug_get_current_plug(debugMbhc->current_plug));
-		ret_cnt = simple_read_from_buffer(ubuf, count, ppos, lbuf,strnlen(lbuf, size));
-	} else if (!strcmp(access_str, "r_imped")) {
-		scnprintf(lbuf,size,"r_imped = %d ohm\n",debugMbhc->zr);
-		ret_cnt = simple_read_from_buffer(ubuf, count, ppos, lbuf,strnlen(lbuf, size));
-	} else if (!strcmp(access_str, "headset_type")) {
-		if(debugMbhc->current_plug != MBHC_PLUG_TYPE_NONE)
-			scnprintf(lbuf,size,"%s\n",debugMbhc->sdev.name);
-		else
-			scnprintf(lbuf,size,"%s\n","None");
-		ret_cnt = simple_read_from_buffer(ubuf, count, ppos, lbuf,strnlen(lbuf, size));
-	} else if(!strcmp(access_str, "status")) {
-		for(mbhc_reg = WCD_MBHC_L_DET_EN; mbhc_reg != WCD_MBHC_REG_FUNC_MAX; mbhc_reg++)
-		{
-			WCD_MBHC_REG_READ(mbhc_reg, reg_value);
-			ret_cnt += scnprintf(lbuf + ret_cnt,size - ret_cnt,"%s : 0x%.2x\n",debugMbhc->wcd_mbhc_regs[mbhc_reg].id,reg_value);
-		}
-		lbuf[ret_cnt] = 0;
-		ret_cnt = simple_read_from_buffer(ubuf, count, ppos, lbuf,ret_cnt);
-	} else {
-		pr_err("%s: %s not permitted to read\n", __func__, access_str);
-		ret_cnt = -EPERM;
-	}
-
-	return ret_cnt;
-}
-
-static const struct file_operations codec_debug_ops = {
-	.open = mbhc_debug_open,
-	.read = mbhc_debug_read
-};
-#endif
-
-
-
 /*
  * wcd_mbhc_init : initialize MBHC internal structures.
  *
@@ -2629,28 +2552,6 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 	if (ret < 0) {
 		pr_err("[LGE MBHC] Failed to register switch device\n");
 		switch_dev_unregister(&mbhc->sdev);
-	}
-#endif
-#ifdef CONFIG_DEBUG_FS
-	debugMbhc = mbhc;
-
-	debugfs_mbhc_dent = debugfs_create_dir("mbhc_v2", 0);
-	if (!IS_ERR(debugfs_mbhc_dent)) {
-		debugfs_mic_type = debugfs_create_file("mic_type",
-		S_IRUGO, debugfs_mbhc_dent,
-		(void *) "mic_type", &codec_debug_ops);
-
-		debugfs_r_imped = debugfs_create_file("r_imped",
-		S_IRUGO, debugfs_mbhc_dent,
-		(void *) "r_imped", &codec_debug_ops);
-
-		debugfs_headset_type = debugfs_create_file("headset_type",
-		S_IRUGO, debugfs_mbhc_dent,
-		(void *) "headset_type", &codec_debug_ops);
-
-		debugfs_status = debugfs_create_file("status",
-		S_IRUGO, debugfs_mbhc_dent,
-		(void *) "status", &codec_debug_ops);
 	}
 #endif
 	mutex_init(&mbhc->hphl_pa_lock);
@@ -2777,9 +2678,6 @@ void wcd_mbhc_deinit(struct wcd_mbhc *mbhc)
 	struct snd_soc_codec *codec = mbhc->codec;
 #ifdef CONFIG_MACH_LGE
 	switch_dev_unregister(&mbhc->sdev);
-#endif
-#ifdef CONFIG_DEBUG_FS
-	debugfs_remove_recursive(debugfs_mbhc_dent);
 #endif
 
 	mbhc->mbhc_cb->free_irq(codec, mbhc->intr_ids->mbhc_sw_intr, mbhc);

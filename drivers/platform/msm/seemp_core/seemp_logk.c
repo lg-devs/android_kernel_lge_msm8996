@@ -155,7 +155,11 @@ void seemp_logk_kernel_end_record(void *blck)
 	if (blk) {
 		/*update status at the very end*/
 		blk->status |= 0x1;
+#ifdef CONFIG_UIDGID_STRICT_TYPE_CHECKS
 		blk->uid =  (current_uid()).val;
+#else
+		blk->uid =  (current_uid());
+#endif
 
 		ringbuf_finish_writer(slogk_dev, blk);
 	}
