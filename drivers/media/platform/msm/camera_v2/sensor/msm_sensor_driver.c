@@ -1500,6 +1500,7 @@ static struct i2c_driver msm_sensor_driver_i2c = {
 static int __init msm_sensor_driver_init(void)
 {
 	int32_t rc = 0;
+	int32_t rev = 0;
 
 	CDBG("%s Enter\n", __func__);
 	rc = platform_driver_register(&msm_sensor_platform_driver);
@@ -1515,6 +1516,7 @@ static int __init msm_sensor_driver_init(void)
 			rc = i2c_add_driver(&msm_sensor_driver_i2c);
 			if (rc)
 				pr_err("%s i2c_add_driver failed rc = %d",  __func__, rc);
+		}
 
 	return rc;
 }

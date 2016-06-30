@@ -51,7 +51,10 @@
 
 
 static int restart_mode;
-static void *restart_reason, *dload_type_addr;
+static void *restart_reason;
+#ifndef CONFIG_LGE_HANDLE_PANIC
+static void *dload_type_addr;
+#endif
 static bool scm_pmic_arbiter_disable_supported;
 static bool scm_deassert_ps_hold_supported;
 /* Download mode master kill-switch */
@@ -64,7 +67,9 @@ static void scm_disable_sdi(void);
  * So the SDI cannot be re-enabled when it already by-passed.
 */
 static int download_mode = 1;
+#ifndef CONFIG_LGE_HANDLE_PANIC
 static struct kobject dload_kobj;
+#endif
 
 #ifdef CONFIG_MSM_DLOAD_MODE
 #define EDL_MODE_PROP "qcom,msm-imem-emergency_download_mode"
@@ -501,6 +506,7 @@ static const struct sysfs_ops reset_sysfs_ops = {
 	.store	= attr_store,
 };
 
+#ifndef CONFIG_LGE_HANDLE_PANIC
 static struct kobj_type reset_ktype = {
 	.sysfs_ops	= &reset_sysfs_ops,
 };
@@ -539,6 +545,7 @@ static size_t store_emmc_dload(struct kobject *kobj, struct attribute *attr,
 
 	return count;
 }
+
 RESET_ATTR(emmc_dload, 0644, show_emmc_dload, store_emmc_dload);
 
 static struct attribute *reset_attrs[] = {
@@ -549,6 +556,7 @@ static struct attribute *reset_attrs[] = {
 static struct attribute_group reset_attr_group = {
 	.attrs = reset_attrs,
 };
+#endif
 
 #ifdef CONFIG_LGE_HANDLE_PANIC
 static int __init lge_crash_handler(char *status)
@@ -619,9 +627,9 @@ static int msm_restart_probe(struct platform_device *pdev)
 		pr_err("%s:Error in creation sysfs_create_group\n", __func__);
 		kobject_del(&dload_kobj);
 	}
-#endif
-#endif
 skip_sysfs_create:
+#endif
+#endif
 	np = of_find_compatible_node(NULL, NULL,
 				"qcom,msm-imem-restart_reason");
 	if (!np) {

@@ -2867,7 +2867,7 @@ static bool mdss_dsi_fifo_status(struct mdss_dsi_ctrl_pdata *ctrl)
 #if defined (CONFIG_LGE_MIPI_H1_INCELL_QHD_CMD_PANEL)
 		if(skip_lcd_error_check){
 			ctrl->err_cont.fifo_err_cnt++;
-			return;
+			//return;
 		}
 #endif
 		if (status & 0x44440000) {/* DLNx_HS_FIFO_OVERFLOW */

@@ -221,6 +221,18 @@ static void populate_dest_info(int *dest_vmids, int nelements,
 	(*list)->list_size = nelements * sizeof(struct dest_vm_and_perm_info);
 }
 
+static void destroy_info_list(struct info_list *info_list)
+{
+	kfree(info_list->list_head);
+	kfree(info_list);
+}
+
+static void destroy_dest_info_list(struct dest_info_list *dest_list)
+{
+	kfree(dest_list->dest_info);
+	kfree(dest_list);
+}
+
 static void get_info_list_from_table(struct sg_table *table,
 					struct info_list **list)
 {
@@ -318,8 +330,8 @@ int hyp_assign_table(struct sg_table *table,
 	kfree(source_vm_copy);
 err2:
 	destroy_dest_info_list(dest_info_list);
-err1:
-	destroy_info_list(info_list);
+//err1:
+//	destroy_info_list(info_list);
 	return ret;
 }
 

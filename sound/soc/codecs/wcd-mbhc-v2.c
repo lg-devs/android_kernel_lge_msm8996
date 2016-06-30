@@ -920,7 +920,7 @@ static void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
 			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 0);
 			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 0);
 			mbhc->mbhc_cb->mbhc_micbias_control(mbhc->codec,
-							MICB_PULLUP_DISABLE);
+							MIC_BIAS_2, MICB_PULLUP_DISABLE);
 			/* Setup for insertion detection */
 			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ELECT_DETECTION_TYPE,
 						 1);
@@ -1092,7 +1092,7 @@ static void wcd_mbhc_update_fsm_source(struct wcd_mbhc *mbhc,
 	case MBHC_PLUG_TYPE_ANC_HEADPHONE:
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 0);
 		mbhc->mbhc_cb->mbhc_micbias_control(mbhc->codec,
-						MICB_PULLUP_ENABLE);
+						MIC_BIAS_2, MICB_PULLUP_ENABLE);
 		break;
 	default:
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 0);
@@ -1265,7 +1265,7 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 			pr_info("[LGE MBHC] %s: HIGH_HPH is detected. Raise MIC Bias2 to 2.7v and report 4-pin headset.\n", __func__);
 	}
 #endif
-	if (plug_type == MBHC_PLUG_TYPE_HEADSET ||
+	if ((plug_type == MBHC_PLUG_TYPE_HEADSET ||
 	    plug_type == MBHC_PLUG_TYPE_HEADPHONE) &&
 		 (!wcd_swch_level_remove(mbhc))) {
 		WCD_MBHC_RSC_LOCK(mbhc);
@@ -1629,7 +1629,7 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 0);
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 0);
 		mbhc->mbhc_cb->mbhc_micbias_control(mbhc->codec,
-						MICB_PULLUP_DISABLE);
+						MIC_BIAS_2, MICB_PULLUP_DISABLE);
 		if (mbhc->mbhc_cb->mbhc_common_micb_ctrl)
 			mbhc->mbhc_cb->mbhc_common_micb_ctrl(codec,
 					MBHC_COMMON_MICB_TAIL_CURR, false);

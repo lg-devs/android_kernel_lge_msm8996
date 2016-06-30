@@ -1,6 +1,9 @@
 #ifndef _LINUX_ECRYPTFS_H
 #define _LINUX_ECRYPTFS_H
 
+struct inode;
+struct page;
+
 /* Version verification for shared data structures w/ userspace */
 #define ECRYPTFS_VERSION_MAJOR 0x00
 #define ECRYPTFS_VERSION_MINOR 0x04
@@ -41,6 +44,7 @@
 #define RFC2440_CIPHER_AES_256 0x09
 #define RFC2440_CIPHER_TWOFISH 0x0a
 #define RFC2440_CIPHER_CAST_6 0x0b
+#define RFC2440_CIPHER_AES_XTS_256 0x0c
 
 #define RFC2440_CIPHER_RSA 0x01
 

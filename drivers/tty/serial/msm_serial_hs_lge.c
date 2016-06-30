@@ -308,7 +308,7 @@ static int msm_hs_ioctl(struct uart_port *uport, unsigned int cmd,
 		MSM_HS_DBG("%s():ENABLE UART CLOCK: cmd=%d, ioc %d\n", __func__,
 			cmd, ioctl_count);
 		atomic_inc(&msm_uport->ioctl_count);
-		msm_hs_request_clock_on(&msm_uport->uport);
+		ret = msm_hs_request_clock_on(&msm_uport->uport);
 		break;
 	}
 	case MSM_DISABLE_UART_CLOCK: {
@@ -319,7 +319,7 @@ static int msm_hs_ioctl(struct uart_port *uport, unsigned int cmd,
 				__func__);
 		} else {
 			atomic_dec(&msm_uport->ioctl_count);
-			msm_hs_request_clock_off(&msm_uport->uport);
+			ret = msm_hs_request_clock_off(&msm_uport->uport);
 		}
 		break;
 	}
@@ -2248,19 +2248,53 @@ void msm_hs_resource_on(struct msm_hs_port *msm_uport)
 }
 
 /* Request to turn off uart clock once pending TX is flushed */
-void msm_hs_request_clock_off(struct uart_port *uport)
+int msm_hs_request_clock_off(struct uart_port *uport)
 {
 	struct msm_hs_port *msm_uport = UARTDM_TO_MSM(uport);
+	int ret = 0;
+
+	mutex_lock(&msm_uport->mtx);
+	/*
+	 * If we're in the middle of a system suspend, don't process these
+	 * userspace/kernel API commands.
+	 */
+	if (msm_uport->pm_state == MSM_HS_PM_SYS_SUSPENDED) {
+		MSM_HS_WARN("%s:Can't process clk request during suspend",
+			__func__);
+		ret = -EIO;
+	}
+	mutex_unlock(&msm_uport->mtx);
+	if (ret)
+		goto exit_request_clock_off;
+
 	/* Set the flag to disable flow control and wakeup irq */
 	if (msm_uport->obs)
 		atomic_set(&msm_uport->client_req_state, 1);
 	msm_hs_resource_unvote(msm_uport);
+exit_request_clock_off:
+	return ret;
 }
 EXPORT_SYMBOL(msm_hs_request_clock_off);
 
-void msm_hs_request_clock_on(struct uart_port *uport)
+int msm_hs_request_clock_on(struct uart_port *uport)
 {
 	struct msm_hs_port *msm_uport = UARTDM_TO_MSM(uport);
+	int ret = 0;
+
+	mutex_lock(&msm_uport->mtx);
+	/*
+	 * If we're in the middle of a system suspend, don't process these
+	 * userspace/kernel API commands.
+	 */
+	if (msm_uport->pm_state == MSM_HS_PM_SYS_SUSPENDED) {
+		MSM_HS_WARN("%s:Can't process clk request during suspend",
+			__func__);
+		ret = -EIO;
+	}
+	mutex_unlock(&msm_uport->mtx);
+	if (ret)
+		goto exit_request_clock_on;
+
 	msm_hs_resource_vote(UARTDM_TO_MSM(uport));
 
 	if (msm_uport->pm_state != MSM_HS_PM_ACTIVE) {
@@ -2272,6 +2306,8 @@ void msm_hs_request_clock_on(struct uart_port *uport)
 	/* Clear the flag */
 	if (msm_uport->obs)
 		atomic_set(&msm_uport->client_req_state, 0);
+exit_request_clock_on:
+	return ret;
 }
 EXPORT_SYMBOL(msm_hs_request_clock_on);
 

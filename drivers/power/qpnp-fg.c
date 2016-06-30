@@ -1561,8 +1561,8 @@ static void fg_check_ima_error_handling(struct fg_chip *chip)
 		fg_enable_irqs(chip, false);
 		chip->use_last_cc_soc = true;
 		chip->ima_error_handling = true;
-		schedule_delayed_work(&chip->ima_error_recovery_work,
-			msecs_to_jiffies(0));
+		//schedule_delayed_work(&chip->ima_error_recovery_work,
+		//	msecs_to_jiffies(0));
 	} else {
 		if (fg_debug_mask & FG_STATUS)
 			pr_info("IMA error is handled already!\n");
@@ -2141,7 +2141,8 @@ static void fg_handle_battery_insertion(struct fg_chip *chip)
 	schedule_delayed_work(&chip->update_sram_data, msecs_to_jiffies(0));
 }
 
-#ifdef CONFIG_LGE_PM
+//#ifdef CONFIG_LGE_PM
+#if 0
 static int soc_to_setpoint(int soc)
 {
 	int rc, i, len, offset;
@@ -2520,14 +2521,14 @@ static int get_prop_capacity(struct fg_chip *chip)
 				return EMPTY_CAPACITY;
 			}
 
-			if (!vbatt_low_sts)
+			if (!vbatt_low_sts) {
 #ifdef CONFIG_LGE_PM_SOC_SCALING
 				return rescale_monotonic_soc(chip->last_soc,chip);
 #endif
 				return DIV_ROUND_CLOSEST((chip->last_soc - 1) *
 						(FULL_CAPACITY - 2),
 						FULL_SOC_RAW - 2) + 1;
-			else
+			}	else
 				return EMPTY_CAPACITY;
 		} else {
 			return EMPTY_CAPACITY;
@@ -4972,18 +4973,7 @@ static void cc_soc_store_work(struct work_struct *work)
 	}
 
 	fg_relax(&chip->cc_soc_wakeup_source);
-}
 
-	if (fg_debug_mask & FG_STATUS)
-			pr_info("cc_soc_pct: %d last_cc_soc: %lld\n", cc_soc_pct,
-					chip->last_cc_soc);
-
-	if (chip->cc_soc_limit_pct > 0 &&
-			cc_soc_pct >= chip->cc_soc_limit_pct) {
-		pr_err("CC_SOC out of range\n");
-		fg_check_ima_error_handling(chip);
-	}
-	fg_relax(&chip->cc_soc_wakeup_source);
 }
 
 #define SOC_FIRST_EST_DONE	BIT(5)
@@ -5903,33 +5893,6 @@ try_again:
 		}
 	}
 
- try_again:
-	if (write_profile && !chip->ima_error_handling) {
-		if (!chip->charging_disabled) {
-			pr_err("Charging not yet disabled!\n");
-			return -EINVAL;
-		}
-
-		ibat_ua = get_sram_prop_now(chip, FG_DATA_CURRENT);
-		if (ibat_ua == -EINVAL) {
-			pr_err("SRAM not updated yet!\n");
-			return ibat_ua;
-		}
-
-		if (ibat_ua < 0) {
-			pr_warn("Charging enabled?, ibat_ua: %d\n", ibat_ua);
-
-			if (!tried_once) {
-				cancel_delayed_work(&chip->update_sram_data);
-				schedule_delayed_work(&chip->update_sram_data,
-						msecs_to_jiffies(0));
-				msleep(1000);
-				tried_once = true;
-				goto try_again;
-			}
-		}
-	}
-
 	chip->fg_restarting = true;
 	/*
 	 * save the temperature if the sw rbias control is active so that there
@@ -6758,52 +6721,6 @@ static void bcl_hi_power_work(struct work_struct *work)
 	}
 }
 
-static int disable_bcl_lpm(struct fg_chip *chip)
-{
-	u8 data[4];
-	u8 lm_offset = 0;
-	u16 address = 0;
-	int rc = 0;
-
-	address = settings[FG_MEM_BCL_LM_THRESHOLD].address;
-	lm_offset = settings[FG_MEM_BCL_LM_THRESHOLD].offset;
-	rc = fg_mem_read(chip, data, address, 4, 0, 1);
-	if (rc) {
-		pr_err("Error reading BCL LM & MH threshold rc:%d\n", rc);
-		return rc;
-	}
-	pr_debug("Old BCL LM threshold:%x\n", data[lm_offset]);
-
-	/* Put BCL always above LPM */
-	BCL_MA_TO_ADC(0, data[lm_offset]);
-
-	rc = fg_mem_write(chip, data, address, 4, 0, 0);
-	if (rc)
-		pr_err("spmi write failed. addr:%03x, rc:%d\n",
-			address, rc);
-	else
-		pr_debug("New BCL LM threshold:%x\n", data[lm_offset]);
-
-	return rc;
-}
-
-static void bcl_hi_power_work(struct work_struct *work)
-{
-	struct fg_chip *chip = container_of(work,
-			struct fg_chip,
-			bcl_hi_power_work);
-	int rc;
-
-	if (chip->bcl_lpm_disabled) {
-		rc = disable_bcl_lpm(chip);
-		if (rc)
-			pr_err("failed to disable bcl low mode %d\n",
-					rc);
-	} else {
-		update_bcl_thresholds(chip);
-	}
-}
-
 #define VOLT_UV_TO_VOLTCMP8(volt_uv)	\
 			((volt_uv - 2500000) / 9766)
 static int update_irq_volt_empty(struct fg_chip *chip)
@@ -6893,99 +6810,6 @@ static int fg_dischg_gain_dt_init(struct fg_chip *chip)
 	struct device_node *node = chip->spmi->dev.of_node;
 	struct property *prop;
 	int rc, i;
-	size_t size;
-
-	prop = of_find_property(node, "qcom,fg-dischg-voltage-gain-soc",
-			NULL);
-	if (!prop) {
-		pr_err("qcom-fg-dischg-voltage-gain-soc not specified\n");
-		goto out;
-	}
-
-	size = prop->length / sizeof(u32);
-	if (size != VOLT_GAIN_MAX) {
-		pr_err("Voltage gain SOC specified is of incorrect size\n");
-		goto out;
-	}
-
-	rc = of_property_read_u32_array(node,
-		"qcom,fg-dischg-voltage-gain-soc", chip->dischg_gain.soc, size);
-	if (rc < 0) {
-		pr_err("Reading qcom-fg-dischg-voltage-gain-soc failed, rc=%d\n",
-			rc);
-		goto out;
-	}
-
-	for (i = 0; i < VOLT_GAIN_MAX; i++) {
-		if (chip->dischg_gain.soc[i] < 0 ||
-				chip->dischg_gain.soc[i] > 100) {
-			pr_err("Incorrect dischg-voltage-gain-soc\n");
-			goto out;
-		}
-	}
-
-	prop = of_find_property(node, "qcom,fg-dischg-med-voltage-gain",
-			NULL);
-	if (!prop) {
-		pr_err("qcom-fg-dischg-med-voltage-gain not specified\n");
-		goto out;
-	}
-
-	size = prop->length / sizeof(u32);
-	if (size != VOLT_GAIN_MAX) {
-		pr_err("med-voltage-gain specified is of incorrect size\n");
-		goto out;
-	}
-
-	rc = of_property_read_u32_array(node,
-		"qcom,fg-dischg-med-voltage-gain", chip->dischg_gain.medc_gain,
-		size);
-	if (rc < 0) {
-		pr_err("Reading qcom-fg-dischg-med-voltage-gain failed, rc=%d\n",
-			rc);
-		goto out;
-	}
-
-	prop = of_find_property(node, "qcom,fg-dischg-high-voltage-gain",
-			NULL);
-	if (!prop) {
-		pr_err("qcom-fg-dischg-high-voltage-gain not specified\n");
-		goto out;
-	}
-
-	size = prop->length / sizeof(u32);
-	if (size != VOLT_GAIN_MAX) {
-		pr_err("high-voltage-gain specified is of incorrect size\n");
-		goto out;
-	}
-
-	rc = of_property_read_u32_array(node,
-		"qcom,fg-dischg-high-voltage-gain",
-		chip->dischg_gain.highc_gain, size);
-	if (rc < 0) {
-		pr_err("Reading qcom-fg-dischg-high-voltage-gain failed, rc=%d\n",
-			rc);
-		goto out;
-	}
-
-	if (fg_debug_mask & FG_STATUS) {
-		for (i = 0; i < VOLT_GAIN_MAX; i++)
-			pr_info("SOC:%d MedC_Gain:%d HighC_Gain: %d\n",
-				chip->dischg_gain.soc[i],
-				chip->dischg_gain.medc_gain[i],
-				chip->dischg_gain.highc_gain[i]);
-	}
-	return 0;
-out:
-	chip->dischg_gain.enable = false;
-	return rc;
-}
-
-static int fg_dischg_gain_dt_init(struct fg_chip *chip)
-{
-	struct device_node *node = chip->spmi->dev.of_node;
-	struct property *prop;
-	int i, rc = 0;
 	size_t size;
 
 	prop = of_find_property(node, "qcom,fg-dischg-voltage-gain-soc",
@@ -7514,7 +7338,7 @@ static void fg_cancel_all_works(struct fg_chip *chip)
 	cancel_delayed_work_sync(&chip->update_jeita_setting);
 	cancel_delayed_work_sync(&chip->check_empty_work);
 	cancel_delayed_work_sync(&chip->batt_profile_init);
-	cancel_delayed_work_sync(&chip->ima_error_recovery_work);
+	//cancel_delayed_work_sync(&chip->ima_error_recovery_work);
 	cancel_delayed_work_sync(&chip->check_sanity_work);
 	alarm_try_to_cancel(&chip->fg_cap_learning_alarm);
 	if (!chip->ima_error_handling)

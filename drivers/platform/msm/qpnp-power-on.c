@@ -492,6 +492,7 @@ static int qpnp_pon_reset_config(struct qpnp_pon *pon,
 		enum pon_power_off_type type)
 {
 	int rc;
+	u8 reg;
 	u16 rst_en_reg;
 
 	if (pon->pon_ver == QPNP_PON_GEN1_V1)

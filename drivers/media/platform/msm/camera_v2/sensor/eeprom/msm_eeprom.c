@@ -674,7 +674,7 @@ static int eeprom_init_config(struct msm_eeprom_ctrl_t *e_ctrl,
 	}
 
 #ifdef CONFIG_LGE_EEPROM
-	main_sensor_id = e_ctrl->read_mem[MODULE_VENDOR_ID];
+	main_sensor_id = e_ctrl->cal_data.mapdata[MODULE_VENDOR_ID];
 	pr_err("%s:main_sensor_id 0x%x\n", __func__, main_sensor_id);
 #endif
 
@@ -1602,7 +1602,7 @@ static int eeprom_init_config32(struct msm_eeprom_ctrl_t *e_ctrl,
 	}
 
 #ifdef CONFIG_LGE_EEPROM
-	main_sensor_id = e_ctrl->read_mem[MODULE_VENDOR_ID];
+	main_sensor_id = e_ctrl->cal_data.mapdata[MODULE_VENDOR_ID];
 	pr_err("%s:main_sensor_id 0x%x\n", __func__, main_sensor_id);
 #endif
 

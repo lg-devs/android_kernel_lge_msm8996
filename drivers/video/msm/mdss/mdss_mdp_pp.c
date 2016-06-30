@@ -5708,15 +5708,6 @@ static void pp_ad_cfg_write(struct mdss_mdp_ad *ad_hw, struct mdss_ad_info *ad)
 				base + MDSS_MDP_REG_AD_MODE_SEL);
 		pr_debug("stab_itr = %d\n", ad->cfg.stab_itr);
 		break;
-	case MDSS_AD_MODE_MAN_IPC:
-		writel_relaxed(MDSS_AD_T_FILTER_CTRL_0,
-				base + MDSS_MDP_REG_AD_TFILT_CTRL);
-		writel_relaxed(ad->cfg.backlight_scale,
-				base + MDSS_MDP_REG_AD_BL_MAX);
-		writel_relaxed(ad->cfg.mode | MDSS_AD_AUTO_TRIGGER,
-			       base + MDSS_MDP_REG_AD_MODE_SEL);
-		pr_debug("stab_itr = %d\n", ad->cfg.stab_itr);
-		break;
 	default:
 		break;
 	}

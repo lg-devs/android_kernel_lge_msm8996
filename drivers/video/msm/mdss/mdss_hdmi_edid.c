@@ -876,7 +876,7 @@ static void hdmi_edid_add_sink_y420_format(struct hdmi_edid_ctrl *edid_ctrl,
 	}
 
 	ret = hdmi_get_supported_mode(&timing,
-				edid_ctrl->init_data.ds_data,
+				&edid_ctrl->init_data.ds_data,
 				video_format);
 	supported = hdmi_edid_is_mode_supported(edid_ctrl, &timing);
 	sink = &edid_ctrl->sink_data;
@@ -1657,7 +1657,7 @@ static void hdmi_edid_add_sink_video_format(struct hdmi_edid_ctrl *edid_ctrl,
 	}
 
 	ret = hdmi_get_supported_mode(&timing,
-				edid_ctrl->init_data.ds_data,
+				&edid_ctrl->init_data.ds_data,
 				video_format);
 	supported = hdmi_edid_is_mode_supported(edid_ctrl, &timing);
 	sink_data = &edid_ctrl->sink_data;

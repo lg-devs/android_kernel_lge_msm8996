@@ -140,7 +140,7 @@ static void sync_timeline_remove_pt(struct sync_pt *pt)
 void sync_timeline_signal(struct sync_timeline *obj)
 {
 	unsigned long flags;
-	unsigned long debug_flags;
+	//unsigned long debug_flags;
 	LIST_HEAD(signaled_pts);
 	struct list_head *pos, *n;
 

@@ -124,6 +124,18 @@ typedef void (dio_iodone_t)(struct kiocb *iocb, loff_t offset,
 /* File is opened with O_PATH; almost nothing can be done with it */
 #define FMODE_PATH		((__force fmode_t)0x4000)
 
+#ifdef CONFIG_SDCARD_FS
+/* File hasn't page cache and can't be mmaped, for stakable filesystem */
+#define FMODE_NOMAPPABLE	((__force fmode_t)0x8000)
+/* File needs atomic accesses to f_pos */
+#define FMODE_ATOMIC_POS	((__force fmode_t)0x10000)
+/* Write access to underlying fs */
+#define FMODE_WRITER		((__force fmode_t)0x20000)
+/* Has read method(s) */
+#define FMODE_CAN_READ          ((__force fmode_t)0x40000)
+/* Has write method(s) */
+#define FMODE_CAN_WRITE         ((__force fmode_t)0x80000)
+#else
 /* File needs atomic accesses to f_pos */
 #define FMODE_ATOMIC_POS	((__force fmode_t)0x8000)
 /* Write access to underlying fs */
@@ -132,6 +144,7 @@ typedef void (dio_iodone_t)(struct kiocb *iocb, loff_t offset,
 #define FMODE_CAN_READ          ((__force fmode_t)0x20000)
 /* Has write method(s) */
 #define FMODE_CAN_WRITE         ((__force fmode_t)0x40000)
+#endif
 
 /* File was opened by fanotify and shouldn't generate fanotify events */
 #define FMODE_NONOTIFY		((__force fmode_t)0x1000000)
@@ -274,7 +287,7 @@ struct iattr {
  */
 #define FILESYSTEM_MAX_STACK_DEPTH 2
 
-/** 
+/**
  * enum positive_aop_returns - aop return codes with specific semantics
  *
  * @AOP_WRITEPAGE_ACTIVATE: Informs the caller that page writeback has
@@ -284,7 +297,7 @@ struct iattr {
  * 			    be a candidate for writeback again in the near
  * 			    future.  Other callers must be careful to unlock
  * 			    the page if they get this return.  Returned by
- * 			    writepage(); 
+ * 			    writepage();
  *
  * @AOP_TRUNCATED_PAGE: The AOP method that was handed a locked page has
  *  			unlocked it and the page might have been truncated.
@@ -846,10 +859,10 @@ static inline struct file *get_file(struct file *f)
 
 #define	MAX_NON_LFS	((1UL<<31) - 1)
 
-/* Page cache limit. The filesystems should put that into their s_maxbytes 
-   limits, otherwise bad things can happen in VM. */ 
+/* Page cache limit. The filesystems should put that into their s_maxbytes
+   limits, otherwise bad things can happen in VM. */
 #if BITS_PER_LONG==32
-#define MAX_LFS_FILESIZE	(((loff_t)PAGE_CACHE_SIZE << (BITS_PER_LONG-1))-1) 
+#define MAX_LFS_FILESIZE	(((loff_t)PAGE_CACHE_SIZE << (BITS_PER_LONG-1))-1)
 #elif BITS_PER_LONG==64
 #define MAX_LFS_FILESIZE 	((loff_t)0x7fffffffffffffffLL)
 #endif
@@ -1427,6 +1440,9 @@ extern int vfs_rmdir(struct inode *, struct dentry *);
 extern int vfs_unlink(struct inode *, struct dentry *, struct inode **);
 extern int vfs_rename(struct inode *, struct dentry *, struct inode *, struct dentry *, struct inode **, unsigned int);
 extern int vfs_whiteout(struct inode *, struct dentry *);
+#ifdef CONFIG_SDCARD_FS
+extern long do_unlinkat(int, const char __user *, bool);
+#endif
 
 /*
  * VFS dentry helper functions.
@@ -1521,6 +1537,10 @@ struct file_operations {
 	long (*fallocate)(struct file *file, int mode, loff_t offset,
 			  loff_t len);
 	int (*show_fdinfo)(struct seq_file *m, struct file *f);
+#ifdef CONFIG_SDCARD_FS
+	/* get_lower_file is for stakable file system */
+	struct file* (*get_lower_file)(struct file *f);
+#endif
 };
 
 struct inode_operations {
@@ -1560,6 +1580,9 @@ struct inode_operations {
 
 	/* WARNING: probably going away soon, do not use! */
 	int (*dentry_open)(struct dentry *, struct file *, const struct cred *);
+#ifdef CONFIG_SDCARD_FS
+	struct inode * (*get_lower_inode)(struct inode *);
+#endif
 } ____cacheline_aligned;
 
 ssize_t rw_copy_check_uvector(int type, const struct iovec __user * uvector,
@@ -1601,6 +1624,9 @@ struct super_operations {
 	int (*bdev_try_to_free_page)(struct super_block*, struct page*, gfp_t);
 	long (*nr_cached_objects)(struct super_block *, int);
 	long (*free_cached_objects)(struct super_block *, long, int);
+#ifdef CONFIG_SDCARD_FS
+	long (*unlink_callback)(struct inode *, char *);
+#endif
 };
 
 /*
@@ -1793,7 +1819,7 @@ int sync_inode_metadata(struct inode *inode, int wait);
 struct file_system_type {
 	const char *name;
 	int fs_flags;
-#define FS_REQUIRES_DEV		1 
+#define FS_REQUIRES_DEV		1
 #define FS_BINARY_MOUNTDATA	2
 #define FS_HAS_SUBTYPE		4
 #define FS_USERNS_MOUNT		8	/* Can be mounted by userns root */
@@ -2275,6 +2301,9 @@ extern int filemap_fdatawrite_range(struct address_space *mapping,
 extern int vfs_fsync_range(struct file *file, loff_t start, loff_t end,
 			   int datasync);
 extern int vfs_fsync(struct file *file, int datasync);
+#ifdef CONFIG_MACH_LGE
+extern int check_and_sync(void);
+#endif
 static inline int generic_write_sync(struct file *file, loff_t pos, loff_t count)
 {
 	if (!(file->f_flags & O_DSYNC) && !IS_SYNC(file->f_mapping->host))
@@ -2384,7 +2413,7 @@ extern int kernel_read(struct file *, loff_t, char *, unsigned long);
 extern ssize_t kernel_write(struct file *, const char *, size_t, loff_t);
 extern ssize_t __kernel_write(struct file *, const char *, size_t, loff_t *);
 extern struct file * open_exec(const char *);
- 
+
 /* fs/dcache.c -- generic fs support functions */
 extern int is_subdir(struct dentry *, struct dentry *);
 extern int path_is_under(struct path *, struct path *);

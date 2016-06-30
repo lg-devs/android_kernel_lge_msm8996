@@ -19,11 +19,8 @@
 
 #include "mdss_dsi.h"
 #include "mdss_edp.h"
-<<<<<<< HEAD
 #include "mdss_dsi_phy.h"
-=======
 #include "mdss_debug.h"
->>>>>>> f61acad... Import LG H830 v10d into LA.HB.1.1.1-02740-8x96.0
 
 #define MDSS_DSI_DSIPHY_REGULATOR_CTRL_0	0x00
 #define MDSS_DSI_DSIPHY_REGULATOR_CTRL_1	0x04
@@ -2152,13 +2149,10 @@ int mdss_dsi_post_clkon_cb(void *priv,
 	pdata = &ctrl->panel_data;
 
 	if (clk & MDSS_DSI_CORE_CLK) {
-<<<<<<< HEAD
 		mmss_clamp = ctrl->mmss_clamp;
-=======
 		if (!pdata->panel_info.cont_splash_enabled)
 			mdss_dsi_read_hw_revision(ctrl);
 		MDSS_XLOG(ctrl->ndx, MIPI_INP(ctrl->phy_io.base + 0x10));
->>>>>>> f61acad... Import LG H830 v10d into LA.HB.1.1.1-02740-8x96.0
 		/*
 		 * controller setup is needed if coming out of idle
 		 * power collapse with clamps enabled.

@@ -540,7 +540,6 @@ struct mdss_ad_info {
 	u16 last_calib[4];
 	bool last_ad_data_valid;
 	bool last_calib_valid;
-	u32 ipc_frame_count;
 	u32 bl_data;
 	u32 calc_itr;
 	uint32_t bl_lin[AD_BL_LIN_LEN];

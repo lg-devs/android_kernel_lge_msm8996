@@ -1862,16 +1862,6 @@ enum cpe_svc_result cpe_svc_shutdown(void *cpe_handle)
 	return rc;
 }
 
-enum cpe_svc_result cpe_svc_shutdown(void *cpe_handle)
-{
-	enum cpe_svc_result rc = CPE_SVC_SUCCESS;
-
-	CPE_SVC_GRAB_LOCK(&cpe_d.cpe_api_mutex, "cpe_api");
-	rc = __cpe_svc_shutdown(cpe_handle);
-	CPE_SVC_REL_LOCK(&cpe_d.cpe_api_mutex, "cpe_api");
-	return rc;
-}
-
 enum cpe_svc_result cpe_svc_reset(void *cpe_handle)
 {
 	enum cpe_svc_result rc = CPE_SVC_SUCCESS;

@@ -1794,7 +1794,7 @@ static int msm_isp_process_done_buf(struct vfe_device *vfe_dev,
 	struct msm_vfe_axi_stream *stream_info, struct msm_isp_buffer *buf,
 	struct timeval *time_stamp, uint32_t frame_id)
 {
-	int rc, ret;
+	int rc;
 	unsigned long flags;
 	struct msm_isp_event_data buf_event;
 	uint32_t stream_idx = HANDLE_TO_IDX(stream_info->stream_handle);
