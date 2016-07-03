@@ -463,7 +463,9 @@ static void exit_mm(struct task_struct *tsk)
 	/* more a memory barrier than a real lock */
 	task_lock(tsk);
 	tsk->mm = NULL;
+#ifdef CONFIG_MSM_APP_SETTINGS
 	app_setting = mm->app_setting;
+#endif
 	up_read(&mm->mmap_sem);
 	enter_lazy_tlb(mm, current);
 	task_unlock(tsk);
