@@ -934,14 +934,14 @@
 						   "cdc-vddpx-1";
 
 			qcom,cdc-micbias1-mv = <1800>;
-			qcom,cdc-micbias2-mv = <1800>;
+			qcom,cdc-micbias2-mv = <2000>;
 			qcom,cdc-micbias3-mv = <1800>;
 			qcom,cdc-micbias4-mv = <1800>;
 
 			qcom,cdc-mclk-clk-rate = <9600000>;
 			qcom,cdc-slim-ifd = "tasha-slim-ifd";
 			qcom,cdc-slim-ifd-elemental-addr = [00 00 A0 01 17 02];
-			qcom,cdc-dmic-sample-rate = <4800000>;
+			qcom,cdc-dmic-sample-rate = <2400000>;
 			qcom,cdc-mad-dmic-rate = <600000>;
 		};
 	};
