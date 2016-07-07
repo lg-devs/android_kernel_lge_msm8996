@@ -247,6 +247,9 @@ static void __init setup_processor(void)
 	if (L1_CACHE_BYTES < cls)
 		pr_warn("L1_CACHE_BYTES smaller than the Cache Writeback Granule (%d < %d)\n",
 			L1_CACHE_BYTES, cls);
+	else
+		pr_info("L1_CACHE_BYTES (%d) Cache Writeback Granule (%d)\n",
+			L1_CACHE_BYTES, cls);
 
 	/*
 	 * ID_AA64ISAR0_EL1 contains 4-bit wide signed feature blocks.
