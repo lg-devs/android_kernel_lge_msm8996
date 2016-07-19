@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -503,6 +503,8 @@ int ipa_uc_interface_init(void)
 
 	mutex_init(&ipa_ctx->uc_ctx.uc_lock);
 
+	init_completion(&ipa_ctx->uc_ctx.uc_completion);
+
 	if (ipa_ctx->ipa_hw_type >= IPA_HW_v2_5) {
 		phys_addr = ipa_ctx->ipa_wrapper_base +
 			ipa_ctx->ctrl->ipa_reg_base_ofst +
@@ -583,7 +585,7 @@ int ipa_uc_send_cmd(u32 cmd, u32 opcode, u32 expected_status,
 		return -EBADF;
 	}
 
-	init_completion(&ipa_ctx->uc_ctx.uc_completion);
+	reinit_completion(&ipa_ctx->uc_ctx.uc_completion);
 
 	ipa_ctx->uc_ctx.uc_sram_mmio->cmdParams = cmd;
 	ipa_ctx->uc_ctx.uc_sram_mmio->cmdOp = opcode;
