@@ -38,6 +38,7 @@
 #define HS_UART_0 0
 
 static struct of_device_id bt_power_match_table[] = {
+	{	.compatible = "bcm,bcm4345" },
 	{	.compatible = "bcm,bcm4358" },
 	{}
 };
