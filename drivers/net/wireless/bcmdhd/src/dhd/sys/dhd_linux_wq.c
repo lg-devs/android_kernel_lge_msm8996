@@ -2,7 +2,7 @@
  * Broadcom Dongle Host Driver (DHD), Generic work queue framework
  * Generic interface to handle dhd deferred work events
  *
- * Copyright (C) 1999-2014, Broadcom Corporation
+ * Copyright (C) 1999-2015, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -22,7 +22,10 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_linux_wq.c 449578 2014-01-17 13:53:20Z $
+ *
+ * <<Broadcom-WL-IPTag/Open:>>
+ *
+ * $Id: dhd_linux_wq.c 590770 2015-10-06 02:31:23Z $
  */
 
 #include <linux/init.h>
@@ -47,6 +50,7 @@ struct dhd_deferred_event_t {
 	u8	event; /* holds the event */
 	void	*event_data; /* Holds event specific data */
 	event_handler_t event_handler;
+	u8  padding;
 };
 #define DEFRD_EVT_SIZE	sizeof(struct dhd_deferred_event_t)
 
@@ -235,6 +239,9 @@ dhd_deferred_schedule_work(void *workq, void *event_data, u8 event,
 		status = kfifo_in_spinlocked(deferred_wq->prio_fifo, &deferred_event,
 			DEFRD_EVT_SIZE, &deferred_wq->work_lock);
 	} else {
+        if (DEFRD_EVT_SIZE > kfifo_avail(deferred_wq->work_fifo))
+            return DHD_WQ_STS_SCHED_FAILED;
+
 		status = kfifo_in_spinlocked(deferred_wq->work_fifo, &deferred_event,
 			DEFRD_EVT_SIZE, &deferred_wq->work_lock);
 	}
