@@ -183,4 +183,10 @@ config SND_SOC_MSM8X16
 	 the machine driver and the corresponding
 	 DAI-links
 
+config SND_LGE_DSDP_DUAL_AUDIO
+	bool "LGE DSDP DUAL AUDIO"
+	default n
+	help
+	 To support LGE Sound DSDP Dual Audio
+
 endmenu

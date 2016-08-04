@@ -3079,6 +3079,44 @@ static struct snd_soc_dai_link msm8996_hdmi_dai_link[] = {
 #define LGE_DAI_LINK_ID_BASE	80
 
 static struct snd_soc_dai_link msm8996_lge_dai_links[] = {
+#ifdef CONFIG_SND_LGE_DSDP_DUAL_AUDIO
+	{
+		.name = "Dual Audio",
+		.stream_name = "Dual audio",
+		.cpu_dai_name = "MultiMedia2",
+		.platform_name = "msm-pcm-dsp.0",
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		.dpcm_capture = 1,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+		.be_id = MSM_FRONTEND_DAI_MULTIMEDIA2,
+	},
+#else
+	/* DUMMY DAI Link 82 */
+	{
+		.name = "Dummy DAI 82",
+		.stream_name = "MultiMedia2",
+		.cpu_dai_name = "MultiMedia2",
+		.platform_name = "msm-pcm-dsp.0",
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		.dpcm_capture = 1,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+		.be_id = MSM_FRONTEND_DAI_MULTIMEDIA2,
+	},
+#endif	/* CONFIG_SND_LGE_DSDP_DUAL_AUDIO */
 };
 
 static struct snd_soc_dai_link msm8996_dummy_dai_link[] = {
