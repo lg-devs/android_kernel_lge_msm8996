@@ -3070,13 +3070,50 @@ static struct snd_soc_dai_link msm8996_hdmi_dai_link[] = {
 		.ignore_suspend = 1,
 	},
 };
+#ifndef CONFIG_SND_DISABLE_DUMMY_DAI
+/* DAI LINKs added by lge should be here
+ * Number of Qualcomm DAI should be smaller than LGE_DAI_LINK_ID_BASE
+ * When you create new DAI link, you should add new one at the tail of list
+ * You should place a dummy DAI instead of removed DAI when you defeature a function */
+
+#define LGE_DAI_LINK_ID_BASE	80
+
+static struct snd_soc_dai_link msm8996_lge_dai_links[] = {
+};
+
+static struct snd_soc_dai_link msm8996_dummy_dai_link[] = {
+	/* DUMMY DAI Link Template */
+	{
+		.name = "Dummy DAI",
+		.stream_name = "MultiMedia2",
+		.cpu_dai_name = "MultiMedia2",
+		.platform_name = "msm-pcm-dsp.0",
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		.dpcm_capture = 1,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+		.be_id = MSM_FRONTEND_DAI_MULTIMEDIA2,
+	},
+};
+#endif	/* CONFIG_SND_DISABLE_DUMMY_DAI */
 
 static struct snd_soc_dai_link msm8996_tasha_dai_links[
+#ifndef CONFIG_SND_DISABLE_DUMMY_DAI
+			 LGE_DAI_LINK_ID_BASE +
+			 ARRAY_SIZE(msm8996_lge_dai_links)];
+#else
 			 ARRAY_SIZE(msm8996_common_dai_links) +
 			 ARRAY_SIZE(msm8996_tasha_fe_dai_links) +
 			 ARRAY_SIZE(msm8996_common_be_dai_links) +
 			 ARRAY_SIZE(msm8996_tasha_be_dai_links) +
 			 ARRAY_SIZE(msm8996_hdmi_dai_link)];
+#endif	/* CONFIG_SND_DISABLE_DUMMY_DAI */
 
 static int msm8996_wsa881x_init(struct snd_soc_component *component)
 {
@@ -3326,6 +3363,26 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 		card->dai_link = dailink;
 		card->num_links = len_4;
 	}
+#ifndef CONFIG_SND_DISABLE_DUMMY_DAI
+	if (card) {
+		{
+			static char dummy_dai_name[LGE_DAI_LINK_ID_BASE][20];
+			int i;
+
+			for (i = card->num_links ; i < LGE_DAI_LINK_ID_BASE ; i++) {
+				struct snd_soc_dai_link *link = msm8996_tasha_dai_links + i;
+				memcpy(link, msm8996_dummy_dai_link, sizeof(msm8996_dummy_dai_link));
+				snprintf(&dummy_dai_name[i][0],20, "Dummy DAI %d", i);
+				link->name = &dummy_dai_name[i][0];
+			}
+			card->num_links = LGE_DAI_LINK_ID_BASE;
+		}
+
+		memcpy(msm8996_tasha_dai_links + card->num_links,
+			   msm8996_lge_dai_links, sizeof(msm8996_lge_dai_links));
+		card->num_links += ARRAY_SIZE(msm8996_lge_dai_links);
+	}
+#endif	/* CONFIG_SND_DISABLE_DUMMY_DAI */
 
 	return card;
 }
