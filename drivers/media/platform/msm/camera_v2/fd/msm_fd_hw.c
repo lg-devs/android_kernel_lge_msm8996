@@ -1276,6 +1276,7 @@ void msm_fd_hw_put(struct msm_fd_device *fd)
 		msm_fd_hw_bus_release(fd);
 		msm_fd_hw_disable_clocks(fd);
 		msm_fd_hw_disable_regulators(fd);
+		flush_work(&fd->work);
 	}
 	mutex_unlock(&fd->lock);
 }
