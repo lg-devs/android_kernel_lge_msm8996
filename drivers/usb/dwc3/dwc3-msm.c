@@ -225,6 +225,9 @@ struct dwc3_msm {
 	atomic_t                in_p3;
 	unsigned int		lpm_to_suspend_delay;
 	bool			init;
+#ifdef CONFIG_LGE_PM_CHARGING_CONTROLLER
+	int phy_nondrive_mode;
+#endif
 };
 
 #define USB_HSPHY_3P3_VOL_MIN		3050000 /* uV */
@@ -1768,6 +1771,11 @@ static int dwc3_msm_power_get_property_usb(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_USB_OTG:
 		val->intval = !mdwc->id_state;
 		break;
+#ifdef CONFIG_LGE_PM_CHARGING_CONTROLLER
+	case POWER_SUPPLY_PROP_USB_NON_DRIVE:
+		val->intval = mdwc->phy_nondrive_mode;
+		break;
+#endif
 	default:
 		return -EINVAL;
 	}
@@ -1866,6 +1874,19 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_HEALTH:
 		mdwc->health_status = val->intval;
 		break;
+#ifdef CONFIG_LGE_PM_CHARGING_CONTROLLER
+	case POWER_SUPPLY_PROP_USB_NON_DRIVE:
+		if (val->intval == 1) {
+			if (mdwc->vbus_active && dwc->softconnect) {
+				pr_info("%s(): put phy into non-drive mode\n", __func__);
+				usb_phy_set_nondrive_mode(mdwc->hs_phy);
+			}
+			mdwc->phy_nondrive_mode = 1;
+		} else {
+			mdwc->phy_nondrive_mode = 0;
+		}
+		break;
+#endif
 	default:
 		return -EINVAL;
 	}
@@ -1929,6 +1950,9 @@ static enum power_supply_property dwc3_msm_pm_power_props_usb[] = {
 	POWER_SUPPLY_PROP_TYPE,
 	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_USB_OTG,
+#ifdef CONFIG_LGE_PM_CHARGING_CONTROLLER
+	POWER_SUPPLY_PROP_USB_NON_DRIVE,
+#endif
 };
 
 static void dwc3_ext_notify_online(void *ctx, int on)
