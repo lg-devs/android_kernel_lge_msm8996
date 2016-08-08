@@ -51,8 +51,25 @@
 #include "debug.h"
 #include "xhci.h"
 
+#ifdef CONFIG_LGE_PM_CABLE_DETECTION
+#include <soc/qcom/lge/board_lge.h>
+#include <soc/qcom/lge/lge_cable_detection.h>
+#include <linux/qpnp/qpnp-adc.h>
+#include <linux/reboot.h>
+#include <soc/qcom/restart.h>
+static int firstboot_check = 1;
+
+#define DWC3_USB30_CHG_CURRENT 900
+#define DEFAULT_DCP_CHG_MAX    1800
+#endif
+
+#ifdef CONFIG_LGE_PM
+#define DWC3_IDEV_CHG_MAX  1800
+#define DWC3_HVDCP_CHG_MAX 2000
+#else
 #define DWC3_IDEV_CHG_MAX 1500
 #define DWC3_HVDCP_CHG_MAX 1800
+#endif
 
 /* time out to wait for USB cable status notification (in ms)*/
 #define SM_INIT_TIMEOUT 30000
@@ -211,12 +228,24 @@ struct dwc3_msm {
 	bool			disable_host_mode_pm;
 	enum dwc3_id_state	id_state;
 	unsigned long		lpm_flags;
+#ifdef CONFIG_LGE_PM_CABLE_DETECTION
+	struct delayed_work     cable_adc_work;
+	struct qpnp_vadc_chip   *vadc_id_dev;
+	struct qpnp_vadc_chip	*vadc_dev;
+	void (*read_cable_adc)  (struct dwc3_msm *mdwc, bool start);
+	bool                    adc_read_complete;
+
+#endif
 #define MDWC3_SS_PHY_SUSPEND		BIT(0)
 #define MDWC3_ASYNC_IRQ_WAKE_CAPABILITY	BIT(1)
 #define MDWC3_POWER_COLLAPSE		BIT(2)
 
 	bool power_collapse; /* power collapse on cable disconnect */
 	bool power_collapse_por; /* perform POR sequence after power collapse */
+
+#ifdef CONFIG_LGE_PM
+	bool xo_vote_for_charger;
+#endif
 
 	unsigned int		irq_to_affin;
 	struct notifier_block	dwc3_cpu_notifier;
@@ -1347,6 +1376,10 @@ static int dwc3_msm_suspend(struct dwc3_msm *mdwc)
 		return -EBUSY;
 	}
 
+#ifdef CONFIG_LGE_PM_CABLE_DETECTION
+	cancel_delayed_work_sync(&mdwc->cable_adc_work);
+#endif
+
 	/*
 	 * Check if device is not in CONFIGURED state
 	 * then check controller state of L2 and break
@@ -1405,7 +1438,18 @@ static int dwc3_msm_suspend(struct dwc3_msm *mdwc)
 	 */
 	clk_disable_unprepare(mdwc->iface_clk);
 	/* USB PHY no more requires TCXO */
+#ifdef CONFIG_LGE_PM
+	if (lge_get_boot_mode() != LGE_BOOT_MODE_CHARGERLOGO) {
+		if (!mdwc->xo_vote_for_charger) {
+			clk_disable_unprepare(mdwc->xo_clk);
+			dev_err(mdwc->dev, "%s unvote for TCXO buffer\n",
+					__func__);
+		}
+	} else
+		clk_disable_unprepare(mdwc->xo_clk);
+#else
 	clk_disable_unprepare(mdwc->xo_clk);
+#endif
 
 	/* Perform controller power collapse */
 	if (!mdwc->in_host_mode && !mdwc->vbus_active && mdwc->power_collapse) {
@@ -1474,10 +1518,31 @@ static int dwc3_msm_resume(struct dwc3_msm *mdwc)
 	}
 
 	/* Vote for TCXO while waking up USB HSPHY */
+#ifdef CONFIG_LGE_PM
+	if (lge_get_boot_mode() != LGE_BOOT_MODE_CHARGERLOGO) {
+		if (!mdwc->xo_vote_for_charger) {
+			ret = clk_prepare_enable(mdwc->xo_clk);
+			if (ret)
+				dev_err(mdwc->dev, "%s failed to vote TCXO buffer%d\n",
+						__func__, ret);
+			else
+				dev_err(mdwc->dev, "%s vote for TCXO buffer\n",
+						__func__);
+		} else
+			dev_err(mdwc->dev, "%s xo_vote_for_charger = %d\n",
+					__func__, mdwc->xo_vote_for_charger);
+	} else {
+		ret = clk_prepare_enable(mdwc->xo_clk);
+		if (ret)
+			dev_err(mdwc->dev, "%s failed to vote TCXO buffer%d\n",
+					__func__, ret);
+	}
+#else
 	ret = clk_prepare_enable(mdwc->xo_clk);
 	if (ret)
 		dev_err(mdwc->dev, "%s failed to vote TCXO buffer%d\n",
 						__func__, ret);
+#endif
 
 	/* Restore controller power collapse */
 	if (mdwc->lpm_flags & MDWC3_POWER_COLLAPSE) {
@@ -1747,6 +1812,51 @@ static irqreturn_t msm_dwc3_pwr_irq(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+#ifdef CONFIG_LGE_PM_CABLE_DETECTION
+static int
+get_prop_usbin_voltage_now(struct dwc3_msm *mdwc)
+{
+	int rc = 0;
+	struct qpnp_vadc_result results;
+
+	if (IS_ERR_OR_NULL(mdwc->vadc_dev)) {
+		mdwc->vadc_dev = qpnp_get_vadc(mdwc->dev, "usbin");
+		if (IS_ERR(mdwc->vadc_dev))
+			return PTR_ERR(mdwc->vadc_dev);
+	}
+
+	rc = qpnp_vadc_read(mdwc->vadc_dev, USBIN, &results);
+	if (rc) {
+		pr_err("Unable to read usbin rc=%d\n", rc);
+		return 0;
+	} else {
+		return results.physical;
+	}
+}
+#endif
+
+#if defined CONFIG_LGE_USB_MAXIM_EVP && defined CONFIG_LGE_PM_MAXIM_EVP_CONTROL
+static int dwc3_msm_gadget_func_io(struct power_supply *psy,
+					int *val, bool rw)
+{
+	struct dwc3_msm *mdwc = container_of(psy, struct dwc3_msm,
+								usb_psy);
+	struct dwc3 *dwc = platform_get_drvdata(mdwc->dwc3);
+
+	if (!dwc || !dwc->gadget.ops) {
+		dev_err(mdwc->dev, "%s: dwc or usb gadget driver data get failed.\n", __func__);
+		return -EINVAL;
+	}
+
+	if (dwc->gadget.ops->gadget_func_io)
+		dwc->gadget.ops->gadget_func_io(&dwc->gadget, "evp", val, rw);
+	else
+		pr_err("%s gadget_func_io is not exists in gadget.\n", __func__);
+
+	return 0;
+}
+#endif
+
 static int dwc3_msm_power_get_property_usb(struct power_supply *psy,
 				  enum power_supply_property psp,
 				  union power_supply_propval *val)
@@ -1778,6 +1888,12 @@ static int dwc3_msm_power_get_property_usb(struct power_supply *psy,
 #ifdef CONFIG_LGE_PM_CHARGING_CONTROLLER
 	case POWER_SUPPLY_PROP_USB_NON_DRIVE:
 		val->intval = mdwc->phy_nondrive_mode;
+		break;
+#endif
+#ifdef CONFIG_LGE_PM_CABLE_DETECTION
+	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
+		pr_info("%s: POWER_SUPPLY_PROP_VOLTAGE_NOW\n", __func__);
+		val->intval = get_prop_usbin_voltage_now(mdwc);
 		break;
 #endif
 	default:
@@ -1954,6 +2070,9 @@ static enum power_supply_property dwc3_msm_pm_power_props_usb[] = {
 	POWER_SUPPLY_PROP_TYPE,
 	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_USB_OTG,
+#ifdef CONFIG_LGE_PM_CABLE_DETECTION
+	POWER_SUPPLY_PROP_VOLTAGE_NOW,
+#endif
 #ifdef CONFIG_LGE_PM_CHARGING_CONTROLLER
 	POWER_SUPPLY_PROP_USB_NON_DRIVE,
 #endif
@@ -2167,6 +2286,9 @@ static int dwc3_msm_probe(struct platform_device *pdev)
 	INIT_WORK(&mdwc->bus_vote_w, dwc3_msm_bus_vote_w);
 	init_completion(&mdwc->dwc3_xcvr_vbus_init);
 	INIT_DELAYED_WORK(&mdwc->sm_work, dwc3_otg_sm_work);
+#ifdef CONFIG_LGE_PM_CABLE_DETECTION
+	INIT_DELAYED_WORK(&mdwc->cable_adc_work, dwc3_cable_adc_work);
+#endif
 
 	/* Get all clks and gdsc reference */
 	ret = dwc3_msm_get_clk_gdsc(mdwc);
@@ -2449,6 +2571,9 @@ static int dwc3_msm_probe(struct platform_device *pdev)
 	dwc->vbus_active = of_property_read_bool(node, "qcom,vbus-present");
 	mdwc->irq_to_affin = platform_get_irq(mdwc->dwc3, 0);
 	mdwc->dwc3_cpu_notifier.notifier_call = dwc3_cpu_notifier_cb;
+#ifdef CONFIG_LGE_PM_CABLE_DETECTION
+	mdwc->read_cable_adc = dwc3_read_cable_adc;
+#endif
 
 	if (cpu_to_affin)
 		register_cpu_notifier(&mdwc->dwc3_cpu_notifier);
@@ -2527,7 +2652,9 @@ static int dwc3_msm_remove(struct platform_device *pdev)
 	}
 
 	cancel_delayed_work_sync(&mdwc->sm_work);
-
+#ifdef CONFIG_LGE_PM_CABLE_DETECTION
+	cancel_delayed_work_sync(&mdwc->cable_adc_work);
+#endif
 	if (mdwc->usb_psy.dev)
 		power_supply_unregister(&mdwc->usb_psy);
 	if (mdwc->hs_phy)
@@ -2560,6 +2687,10 @@ static int dwc3_msm_remove(struct platform_device *pdev)
 	clk_disable_unprepare(mdwc->sleep_clk);
 	clk_disable_unprepare(mdwc->xo_clk);
 	clk_put(mdwc->xo_clk);
+
+#ifdef CONFIG_LGE_PM
+	mdwc->xo_vote_for_charger = false;
+#endif
 
 	dwc3_msm_config_gdsc(mdwc, 0);
 
@@ -2734,6 +2865,9 @@ static int dwc3_otg_start_peripheral(struct dwc3_msm *mdwc, int on)
 static int dwc3_msm_gadget_vbus_draw(struct dwc3_msm *mdwc, unsigned mA)
 {
 	enum power_supply_type power_supply_type;
+#ifdef CONFIG_LGE_PM_CABLE_DETECTION
+	struct dwc3 *dwc = platform_get_drvdata(mdwc->dwc3);
+#endif
 
 	if (mdwc->charging_disabled)
 		return 0;
@@ -2745,7 +2879,12 @@ static int dwc3_msm_gadget_vbus_draw(struct dwc3_msm *mdwc, unsigned mA)
 		goto skip_psy_type;
 	}
 
+#ifdef CONFIG_LGE_PM_CABLE_DETECTION
+	if ((mdwc->chg_type == DWC3_SDP_CHARGER) ||
+		(mdwc->chg_type == DWC3_FLOATED_CHARGER))
+#else
 	if (mdwc->chg_type == DWC3_SDP_CHARGER)
+#endif
 		power_supply_type = POWER_SUPPLY_TYPE_USB;
 	else if (mdwc->chg_type == DWC3_CDP_CHARGER)
 		power_supply_type = POWER_SUPPLY_TYPE_USB_CDP;
@@ -2762,6 +2901,20 @@ skip_psy_type:
 	if (mdwc->chg_type == DWC3_CDP_CHARGER)
 		mA = DWC3_IDEV_CHG_MAX;
 
+#ifdef CONFIG_LGE_PM_CABLE_DETECTION
+	if (mA > 2 && lge_pm_get_cable_type() != NO_INIT_CABLE) {
+		if ((mdwc->chg_type == DWC3_SDP_CHARGER) ||
+			(mdwc->chg_type == DWC3_FLOATED_CHARGER)) {
+			if (dwc->gadget.speed == USB_SPEED_SUPER)
+				mA = DWC3_USB30_CHG_CURRENT;
+			else
+				mA = lge_pm_get_usb_current();
+		} else if ((mdwc->chg_type == DWC3_DCP_CHARGER) ||
+			(mdwc->chg_type == DWC3_PROPRIETARY_CHARGER)) {
+			mA = lge_pm_get_ta_current();
+		}
+	}
+#endif
 #if defined (CONFIG_LGE_TOUCH_CORE)
 	touch_notify_connect(mdwc->chg_type);
 #endif
@@ -2793,6 +2946,40 @@ skip_psy_type:
 
 	power_supply_changed(&mdwc->usb_psy);
 	mdwc->max_power = mA;
+
+#ifdef CONFIG_LGE_PM
+	if (lge_get_boot_mode() != LGE_BOOT_MODE_CHARGERLOGO) {
+		if (mdwc->chg_type == DWC3_DCP_CHARGER && mA != 0) {
+			if (!mdwc->xo_vote_for_charger) {
+				struct dwc3 *dwc = platform_get_drvdata(mdwc->dwc3);
+
+				if (atomic_read(&dwc->in_lpm)) {
+					int ret;
+					ret = clk_prepare_enable(mdwc->xo_clk);
+					if (ret)
+						dev_err(mdwc->dev, "%s failed to vote TCXO buffer%d\n",
+								__func__, ret);
+					else
+						dev_err(mdwc->dev, "%s TCXO enabled\n",
+								__func__);
+				}
+				mdwc->xo_vote_for_charger = true;
+			}
+		} else {
+			if (mdwc->xo_vote_for_charger) {
+				struct dwc3 *dwc = platform_get_drvdata(mdwc->dwc3);
+
+				if (atomic_read(&dwc->in_lpm)) {
+					clk_disable_unprepare(mdwc->xo_clk);
+					dev_err(mdwc->dev, "%s TCXO disabled\n",
+							__func__);
+				}
+				mdwc->xo_vote_for_charger = false;
+			}
+		}
+	}
+#endif
+
 	return 0;
 
 psy_error:
@@ -2930,8 +3117,13 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 			case DWC3_DCP_CHARGER:
 			case DWC3_PROPRIETARY_CHARGER:
 				dev_dbg(mdwc->dev, "DCP charger\n");
+#ifdef CONFIG_LGE_PM_CABLE_DETECTION
+				dwc3_msm_gadget_vbus_draw(mdwc,
+						DEFAULT_DCP_CHG_MAX);
+#else
 				dwc3_msm_gadget_vbus_draw(mdwc,
 						dcp_max_current);
+#endif
 				atomic_set(&dwc->in_lpm, 1);
 				pm_relax(mdwc->dev);
 				break;
@@ -2976,6 +3168,26 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 			mdwc->chg_type = DWC3_INVALID_CHARGER;
 		} else if (test_bit(B_SESS_VLD, &mdwc->inputs)) {
 			dev_dbg(mdwc->dev, "b_sess_vld\n");
+#ifdef CONFIG_LGE_PM_CABLE_DETECTION
+			if ((mdwc->chg_type != DWC3_INVALID_CHARGER) &&
+				!mdwc->adc_read_complete) {
+				mdwc->read_cable_adc(mdwc,
+					true);
+#ifndef CONFIG_LGE_USB_BC_12_VZW
+				mdwc->otg_state = OTG_STATE_B_IDLE;
+				work = 1;
+				delay = VBUS_REG_CHECK_DELAY;
+				break;
+#else
+				if (lge_get_factory_boot()) {
+					mdwc->otg_state = OTG_STATE_B_IDLE;
+					work = 1;
+					delay = VBUS_REG_CHECK_DELAY;
+					break;
+				}
+#endif
+			}
+#endif
 			switch (mdwc->chg_type) {
 			case DWC3_DCP_CHARGER:
 			case DWC3_PROPRIETARY_CHARGER:
@@ -3007,6 +3219,9 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 				break;
 			}
 		} else {
+#ifdef CONFIG_LGE_PM_CABLE_DETECTION
+			mdwc->read_cable_adc(mdwc, false);
+#endif
 			dwc3_msm_gadget_vbus_draw(mdwc, 0);
 			dev_dbg(mdwc->dev, "No device, allowing suspend\n");
 		}

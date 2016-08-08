@@ -51,6 +51,15 @@
 }
 #endif
 
+#ifdef CONFIG_LGE_PM_LLK_MODE
+#define STORE_DEMO_ENABLED_ATTR(_name)				\
+{													\
+	.attr = { .name = #_name, .mode = 0644},		\
+	.show =  power_supply_show_property,			\
+	.store =  power_supply_store_property,			\
+}
+#endif
+
 static struct device_attribute power_supply_attrs[];
 
 static ssize_t power_supply_show_property(struct device *dev,
@@ -301,8 +310,25 @@ static struct device_attribute power_supply_attrs[] = {
 #ifdef CONFIG_LGE_PM_PSEUDO_BATTERY
 	PSEUDO_BATT_ATTR(pseudo_batt),
 #endif
+#ifdef CONFIG_LGE_PM_USB_CURRENT_MAX_MODE
+	POWER_SUPPLY_ATTR(usb_current_max_mode),
+#endif
+#ifdef CONFIG_LGE_PM_VZW_REQ
+	POWER_SUPPLY_ATTR(vzw_chg),
+#endif
+#ifdef CONFIG_LGE_PM_LLK_MODE
+	STORE_DEMO_ENABLED_ATTR(store_demo_enabled),
+#endif
 	POWER_SUPPLY_ATTR(resistance_now),
 	POWER_SUPPLY_ATTR(flash_current_max),
+#ifdef CONFIG_LGE_PM_MAXIM_EVP_CONTROL
+	POWER_SUPPLY_ATTR(is_evp_ta),
+#endif
+#ifdef CONFIG_LGE_USB_MAXIM_EVP
+	POWER_SUPPLY_ATTR(evp_vol),
+	POWER_SUPPLY_ATTR(hvdcp_type),
+	POWER_SUPPLY_ATTR(evp_detect_start),
+#endif
 	POWER_SUPPLY_ATTR(update_now),
 	POWER_SUPPLY_ATTR(esr_count),
 	POWER_SUPPLY_ATTR(safety_timer_enabled),
@@ -316,6 +342,13 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(cycle_count_id),
 	POWER_SUPPLY_ATTR(safety_timer_expired),
 	POWER_SUPPLY_ATTR(restricted_charging),
+#ifdef CONFIG_LGE_PM_BATTERY_ID_CHECKER
+	POWER_SUPPLY_ATTR(batt_id),
+	POWER_SUPPLY_ATTR(valid_batt_id),
+#endif
+#ifdef CONFIG_LGE_PM_CHARGERLOGO_WAIT_FOR_FG_INIT
+	POWER_SUPPLY_ATTR(first_soc_est_done),
+#endif
 	/* Local extensions of type int64_t */
 	POWER_SUPPLY_ATTR(charge_counter_ext),
 	/* Properties of type `const char *' */

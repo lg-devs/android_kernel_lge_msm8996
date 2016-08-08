@@ -269,6 +269,10 @@ static void msm_restart_prepare(const char *cmd)
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_KEYS_CLEAR);
 			__raw_writel(0x7766550a, restart_reason);
+#ifdef CONFIG_LGE_PM
+		} else if (!strncmp(cmd, "charge_reset", 12)) {
+			__raw_writel(0x776655a0, restart_reason);
+#endif
 		} else if (!strncmp(cmd, "oem-", 4)) {
 			unsigned long code;
 			int ret;

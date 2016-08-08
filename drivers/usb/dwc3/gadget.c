@@ -2874,9 +2874,9 @@ static void dwc3_gadget_reset_interrupt(struct dwc3 *dwc)
 	usb_gadget_set_state(&dwc->gadget, USB_STATE_DEFAULT);
 
 	dwc3_gadget_usb3_phy_suspend(dwc, false);
-
+#ifndef CONFIG_LGE_PM
 	usb_gadget_vbus_draw(&dwc->gadget, 0);
-
+#endif
 	if (dwc->gadget.speed != USB_SPEED_UNKNOWN)
 		dwc3_disconnect_gadget(dwc);
 

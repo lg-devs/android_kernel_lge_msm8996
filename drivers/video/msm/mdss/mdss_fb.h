@@ -357,6 +357,10 @@ struct msm_fb_data_type {
 	bool pending_switch;
 	struct mutex switch_lock;
 	struct input_handler *input_handler;
+#if defined(CONFIG_LGE_PM_THERMAL_VTS)
+	struct value_sensor *vs;
+	struct value_sensor *vs_clone;
+#endif
 };
 
 static inline void mdss_fb_update_notify_update(struct msm_fb_data_type *mfd)

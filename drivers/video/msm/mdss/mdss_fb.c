@@ -59,6 +59,10 @@
 #include <soc/qcom/lge/board_lge.h>
 #include <soc/qcom/lge/lge_cable_detection.h>
 #endif
+#ifdef CONFIG_LGE_PM_THERMAL_VTS
+#include <linux/virtual_temp_sensor.h>
+#endif
+#include <linux/lge_display_debug.h>
 
 #if defined(CONFIG_MACH_LGE)
 #include <linux/timer.h>
@@ -257,6 +261,12 @@ static int mdss_fb_notify_update(struct msm_fb_data_type *mfd,
 	return ret;
 }
 
+#if defined(CONFIG_LGE_PM_THERMAL_VTS)
+static int bl_get_led_temp(void *data) {
+	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)data;
+	return mfd->bl_level;
+}
+#endif
 
 #if defined(CONFIG_MACH_LGE)
 #define BL_ENABLE_TIME_SIZE 19
@@ -1235,6 +1245,46 @@ static int mdss_fb_probe(struct platform_device *pdev)
 
 	INIT_DELAYED_WORK(&mfd->idle_notify_work, __mdss_fb_idle_notify_work);
 
+
+#if defined(CONFIG_LGE_PM_THERMAL_VTS)
+	if (!rc && mfd->index == 0) {
+		mfd->vs = kzalloc(sizeof(struct value_sensor), GFP_KERNEL);
+		if (IS_ERR(mfd->vs)) {
+			pr_err("Fail to alloc mfd->vs. err=%d\n", IS_ERR(mfd->vs));
+			return -ENOMEM;
+		}
+		mfd->vs->name = "led";
+		mfd->vs->vts_index = 101;
+		mfd->vs->devdata = mfd;
+		mfd->vs->weight = 1;
+		mfd->vs->get_temp = bl_get_led_temp;
+		rc = vts_register_value_sensor(mfd->vs);
+		if (rc) {
+			kfree(mfd->vs);
+			pr_err("Fail to register value sensor.\n");
+			return -EFAULT;
+		}
+		mfd->vs_clone = kzalloc(sizeof(struct value_sensor), GFP_KERNEL);
+		if (IS_ERR(mfd->vs_clone)) {
+			pr_err("Fail to alloc mfd->vs_clone. err=%d\n.", IS_ERR(mfd->vs_clone));
+			return -ENOMEM;
+		}
+		mfd->vs_clone->name = "led_sensor";
+		mfd->vs_clone->vts_index = 102;
+		mfd->vs_clone->devdata = mfd;
+		mfd->vs_clone->weight = 1000;
+		mfd->vs_clone->get_temp = bl_get_led_temp;
+		rc = vts_register_value_sensor(mfd->vs_clone);
+		if (rc) {
+			kfree(mfd->vs_clone);
+			pr_err("Fail to register value sensor.\n");
+			return -EFAULT;
+		}
+
+		pr_info("\"led\" virtual value sensor is registered.\n");
+	}
+#endif
+
 	return rc;
 }
 
@@ -1289,6 +1339,12 @@ static int mdss_fb_remove(struct platform_device *pdev)
 		lcd_backlight_registered = 0;
 		led_classdev_unregister(&backlight_led);
 	}
+#if defined(CONFIG_LGE_PM_THERMAL_VTS)
+	if (mfd->index == 0) {
+		vts_unregister_value_sensor(mfd->vs);
+		kfree(mfd->vs);
+	}
+#endif
 
 	return 0;
 }
