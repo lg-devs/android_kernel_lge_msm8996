@@ -25,12 +25,13 @@
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
 
+#ifndef CONFIG_MSM_RTB
 void msm_camera_io_w(u32 data, void __iomem *addr)
 {
 	CDBG("%s: 0x%p %08x\n", __func__,  (addr), (data));
 	writel_relaxed((data), (addr));
 }
-
+#endif
 /* This API is to write a block of data
 * to same address
 */
@@ -69,6 +70,7 @@ int32_t msm_camera_io_w_reg_block(const u32 *addr, void __iomem *base,
 	return 0;
 }
 
+#ifndef CONFIG_MSM_RTB
 void msm_camera_io_w_mb(u32 data, void __iomem *addr)
 {
 	CDBG("%s: 0x%p %08x\n", __func__,  (addr), (data));
@@ -78,7 +80,7 @@ void msm_camera_io_w_mb(u32 data, void __iomem *addr)
 	/* ensure write is done */
 	wmb();
 }
-
+#endif
 int32_t msm_camera_io_w_mb_block(const u32 *addr, void __iomem *base, u32 len)
 {
 	int i;
@@ -98,6 +100,7 @@ int32_t msm_camera_io_w_mb_block(const u32 *addr, void __iomem *base, u32 len)
 	return 0;
 }
 
+#ifndef CONFIG_MSM_RTB
 u32 msm_camera_io_r(void __iomem *addr)
 {
 	uint32_t data = readl_relaxed(addr);
@@ -117,7 +120,7 @@ u32 msm_camera_io_r_mb(void __iomem *addr)
 	CDBG("%s: 0x%p %08x\n", __func__,  (addr), (data));
 	return data;
 }
-
+#endif
 void msm_camera_io_memcpy_toio(void __iomem *dest_addr,
 	void __iomem *src_addr, u32 len)
 {
@@ -840,4 +843,3 @@ int msm_camera_hw_write_dt_reg_settings(void __iomem *base,
 		pr_err("%s: Failed dt reg setting write\n", __func__);
 	return rc;
 }
-
