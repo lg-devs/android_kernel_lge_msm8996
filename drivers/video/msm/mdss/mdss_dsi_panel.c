@@ -25,6 +25,10 @@
 
 #include "mdss_dsi.h"
 
+#if defined(CONFIG_MACH_LGE)
+struct mdss_panel_data *pdata_base;
+#endif
+
 #define DT_CMD_HDR 6
 #define MIN_REFRESH_RATE 30
 #define DEFAULT_MDP_TRANSFER_TIME 14000
@@ -2596,6 +2600,13 @@ int mdss_dsi_panel_init(struct device_node *node,
 	ctrl_pdata->low_power_config = mdss_dsi_panel_low_power_config;
 	ctrl_pdata->panel_data.set_backlight = mdss_dsi_panel_bl_ctrl;
 	ctrl_pdata->switch_mode = mdss_dsi_panel_switch_mode;
+
+#if defined(CONFIG_MACH_LGE)
+	if (ctrl_pdata->panel_data.panel_info.pdest == DISPLAY_1) {
+		if (pdata_base == NULL)
+			pdata_base = &(ctrl_pdata->panel_data);
+	}
+#endif
 
 	return 0;
 }

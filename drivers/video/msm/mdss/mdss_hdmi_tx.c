@@ -4090,7 +4090,23 @@ static irqreturn_t hdmi_tx_isr(int irq, void *data)
 		 * Ack the current hpd interrupt and stop listening to
 		 * new hpd interrupt.
 		 */
+#ifdef CONFIG_MACH_LGE
+		if (1 == hdmi_ctrl->hpd_state) {
+			/*
+			 * Ack the interrupt and enable HPD interrupts
+			 * to make sure to get disconnect interrupt
+			 */
+			DSS_REG_W(io, HDMI_HPD_INT_CTRL, BIT(0) | BIT(2));
+		} else {
+			/*
+			 * Ack the interrupt and enable HPD interrupts
+			 * to make sure to get connect interrup.
+			 */
+			DSS_REG_W(io, HDMI_HPD_INT_CTRL, BIT(0) | BIT(2) | BIT(1));
+		}
+#else
 		DSS_REG_W(io, HDMI_HPD_INT_CTRL, BIT(0));
+#endif
 
 		/*
 		 * If suspend has already triggered, don't start the hpd work
@@ -4382,10 +4398,25 @@ static int hdmi_tx_panel_event_handler(struct mdss_panel_data *panel_data,
 		break;
 
 	case MDSS_EVENT_UNBLANK:
+#ifdef CONFIG_MACH_LGE
+		if (!hdmi_ctrl->hpd_feature_on) {
+			hdmi_tx_send_cable_notification(hdmi_ctrl, 0);
+			rc = -EPERM;
+		}
+		else if (!hdmi_ctrl->hpd_initialized && hdmi_ctrl->hpd_feature_on) {
+			hdmi_ctrl->hpd_feature_on = false;
+			hdmi_tx_send_cable_notification(hdmi_ctrl, 0);
+			rc = -EPERM;
+		}
+		else {
+#endif
 		rc = hdmi_tx_power_on(panel_data);
 		if (rc)
 			DEV_ERR("%s: hdmi_tx_power_on failed. rc=%d\n",
 				__func__, rc);
+#ifdef CONFIG_MACH_LGE
+		}
+#endif
 		break;
 
 	case MDSS_EVENT_PANEL_ON:
