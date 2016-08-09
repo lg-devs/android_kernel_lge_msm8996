@@ -10,7 +10,11 @@
  * GNU General Public License for more details.
  */
 
+//QCT work around patch for QUP i2c camera
+#define SENSOR_DRIVER_I2C "i2c_camera"
+#if 0 // QCT original
 #define SENSOR_DRIVER_I2C "camera"
+#endif
 /* Header file declaration */
 #include "msm_sensor.h"
 #include "msm_sd.h"
@@ -106,7 +110,18 @@ static int32_t msm_sensor_driver_create_i2c_v4l_subdev
 	s_ctrl->sensordata->sensor_info->session_id = session_id;
 	s_ctrl->msm_sd.close_seq = MSM_SD_CLOSE_2ND_CATEGORY | 0x3;
 	msm_sd_register(&s_ctrl->msm_sd);
+
+	#ifdef CONFIG_LGE_CAMERA_DRIVER
+	//QCT work around patch for QUP i2c camera
 	CDBG("%s:%d\n", __func__, __LINE__);
+	msm_sensor_v4l2_subdev_fops = v4l2_subdev_fops;
+	#ifdef CONFIG_COMPAT
+		msm_sensor_v4l2_subdev_fops.compat_ioctl32 =
+			msm_sensor_subdev_fops_ioctl;
+	#endif
+	s_ctrl->msm_sd.sd.devnode->fops =
+		&msm_sensor_v4l2_subdev_fops;
+	#endif
 	return rc;
 }
 
@@ -1312,6 +1327,28 @@ static int __init msm_sensor_driver_init(void)
 {
 	int32_t rc = 0;
 
+	#ifdef CONFIG_LGE_CAMERA_DRIVER
+	int32_t rev = 0;
+
+	//QCT work around patch for QUP i2c camera
+	CDBG("\n msm_sensor_driver_init Enter\n");
+	rc = platform_driver_register(&msm_sensor_platform_driver);
+	if (rc) {
+		pr_err("platform_driver_register failed\n");
+	}
+
+	rev = lge_get_board_revno();
+	pr_err("%s:HW rev = %d\n", __func__, rev);
+
+	if (rev >= 5) {
+		//QUP I2C Camera device add (applicable from HW_REV_A)
+		pr_err("%s: i2c_add_driver()\n", __func__);
+		rc = i2c_add_driver(&msm_sensor_driver_i2c);
+		if (rc) {
+			pr_err("i2c_add_driver failed\n");
+		}
+	}
+	#else //QCT Original
 	CDBG("Enter");
 	rc = platform_driver_register(&msm_sensor_platform_driver);
 	if (!rc) {
@@ -1321,6 +1358,7 @@ static int __init msm_sensor_driver_init(void)
 		CDBG("probe i2c");
 		rc = i2c_add_driver(&msm_sensor_driver_i2c);
 	}
+	#endif
 
 	return rc;
 }
