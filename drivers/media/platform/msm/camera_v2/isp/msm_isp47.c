@@ -1370,6 +1370,8 @@ static void msm_vfe47_update_camif_state(struct vfe_device *vfe_dev,
 		if ((vfe_dev->hvx_cmd > HVX_DISABLE) &&
 			(vfe_dev->hvx_cmd <= HVX_ROUND_TRIP))
 			msm_vfe47_configure_hvx(vfe_dev, 1);
+        else
+            msm_vfe47_configure_hvx(vfe_dev, 0);  //QCT zzHDR(HVX) Patch
 
 		bus_en =
 			((vfe_dev->axi_data.
@@ -1390,6 +1392,11 @@ static void msm_vfe47_update_camif_state(struct vfe_device *vfe_dev,
 		if (vfe_dev->axi_data.src_info[VFE_PIX_0].input_mux == TESTGEN)
 			msm_camera_io_w(1, vfe_dev->vfe_base + 0xC58);
 	} else if (update_state == DISABLE_CAMIF) {
+/*LGE_CHANGE_S, CST, add QCT patch about watch dog  when smmu page fault */
+		val = msm_camera_io_r(vfe_dev->vfe_base + 0x464);
+		/* disable danger signal */
+		msm_camera_io_w_mb(val & ~(1 << 8), vfe_dev->vfe_base + 0x464);
+/*LGE_CHANGE_E, CST, add QCT patch about watch dog  when smmu page fault */
 		msm_camera_io_w_mb(0x0, vfe_dev->vfe_base + 0x478);
 		vfe_dev->axi_data.src_info[VFE_PIX_0].active = 0;
 		/* testgen OFF*/
@@ -1401,6 +1408,11 @@ static void msm_vfe47_update_camif_state(struct vfe_device *vfe_dev,
 			msm_vfe47_configure_hvx(vfe_dev, 0);
 
 	} else if (update_state == DISABLE_CAMIF_IMMEDIATELY) {
+/*LGE_CHANGE_S, CST, add QCT patch about watch dog  when smmu page fault */
+		val = msm_camera_io_r(vfe_dev->vfe_base + 0x464);
+		/* disable danger signal */
+		msm_camera_io_w_mb(val & ~(1 << 8), vfe_dev->vfe_base + 0x464);
+/*LGE_CHANGE_E, CST, add QCT patch about watch dog  when smmu page fault */
 		msm_camera_io_w_mb(0x6, vfe_dev->vfe_base + 0x478);
 		vfe_dev->axi_data.src_info[VFE_PIX_0].active = 0;
 		if (vfe_dev->axi_data.src_info[VFE_PIX_0].input_mux == TESTGEN)

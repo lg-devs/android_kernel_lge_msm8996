@@ -42,7 +42,12 @@ static inline struct msm_vfe_axi_stream *msm_isp_get_controllable_stream(
 		struct vfe_device *vfe_dev,
 		struct msm_vfe_axi_stream *stream_info)
 {
+#if 0 //qct original
 	if (vfe_dev->is_split && stream_info->stream_src < RDI_INTF_0)
+#else  //LGE_CHANGE, fix broken livesnapshot issue, case#02330340, dongjin.ha
+	if (vfe_dev->is_split && stream_info->stream_src < RDI_INTF_0 &&
+		stream_info->controllable_output)
+#endif
 		return msm_isp_vfe_get_stream(
 					vfe_dev->common_data->dual_vfe_res,
 					ISP_VFE1,
@@ -2087,13 +2092,19 @@ int msm_isp_axi_halt(struct vfe_device *vfe_dev,
 			__func__, vfe_dev->pdev->id);
 	}
 
-	rc = vfe_dev->hw_info->vfe_ops.axi_ops.halt(vfe_dev,
-		halt_cmd->blocking_halt);
+/*LGE_CHANGE_S, CST, add QCT patch about watch dog  when smmu page fault */
+//	rc = vfe_dev->hw_info->vfe_ops.axi_ops.halt(vfe_dev,
+//		halt_cmd->blocking_halt);
+/*LGE_CHANGE_E, CST, add QCT patch about watch dog  when smmu page fault */
 
 	if (halt_cmd->stop_camif) {
 		vfe_dev->hw_info->vfe_ops.core_ops.
 			update_camif_state(vfe_dev, DISABLE_CAMIF_IMMEDIATELY);
 	}
+/*LGE_CHANGE_S, CST, add QCT patch about watch dog  when smmu page fault */
+	rc = vfe_dev->hw_info->vfe_ops.axi_ops.halt(vfe_dev,
+		halt_cmd->blocking_halt);
+/*LGE_CHANGE_E, CST, add QCT patch about watch dog  when smmu page fault */
 
 	return rc;
 }
@@ -2623,12 +2634,13 @@ static int msm_isp_stop_axi_stream(struct vfe_device *vfe_dev,
 		/*during stop immediately, stop output then stop input*/
 		vfe_dev->hw_info->vfe_ops.irq_ops.enable_camif_err(vfe_dev, 0);
 		vfe_dev->ignore_error = 1;
-		vfe_dev->hw_info->vfe_ops.axi_ops.halt(vfe_dev, 1);
+//		vfe_dev->hw_info->vfe_ops.axi_ops.halt(vfe_dev, 1); /*LGE_CHANGE, CST, add QCT patch about watch dog  when smmu page fault */
 		if (!ext_read)
 			vfe_dev->hw_info->vfe_ops.core_ops.
 				update_camif_state(vfe_dev,
 						DISABLE_CAMIF_IMMEDIATELY);
 		vfe_dev->axi_data.camif_state = CAMIF_STOPPED;
+		vfe_dev->hw_info->vfe_ops.axi_ops.halt(vfe_dev, 1); /*LGE_CHANGE, CST, add QCT patch about watch dog  when smmu page fault */
 		vfe_dev->hw_info->vfe_ops.core_ops.reset_hw(vfe_dev, 0, 1);
 		vfe_dev->hw_info->vfe_ops.core_ops.init_hw_reg(vfe_dev);
 		vfe_dev->hw_info->vfe_ops.irq_ops.enable_camif_err(vfe_dev, 1);
@@ -2854,7 +2866,7 @@ static int msm_isp_request_frame(struct vfe_device *vfe_dev,
 	}
 	if ((frame_src == VFE_PIX_0) && !stream_info->undelivered_request_cnt &&
 		MSM_VFE_STREAM_STOP_PERIOD !=
-		stream_info->activated_framedrop_period) {
+		stream_info->activated_framedrop_period) { /* LGE_CHANGE, QCT patch(CN02245497) fix Connection timed out issue with 3rd party app, 2015-12-11, jungryoul.choi@lge.com */
 		pr_debug("%s:%d vfe %d frame_id %d prev_pattern %x stream_id %x\n",
 			__func__, __LINE__, vfe_dev->pdev->id, frame_id,
 			stream_info->activated_framedrop_period,
@@ -3343,6 +3355,22 @@ void msm_isp_process_axi_irq_stream(struct vfe_device *vfe_dev,
 			__func__,
 			temp_stream->runtime_num_burst_capture);
 		temp_stream->runtime_num_burst_capture--;
+/* LGE_CHANGE_S, fix broken livesnapshot issue, case#02330340, dongjin.ha */
+        /*
+         * For non controllable stream decrement the burst count for
+         * dual stream as well here
+         */
+        if (!stream_info->controllable_output && vfe_dev->is_split &&
+            RDI_INTF_0 > stream_info->stream_src) {
+            temp_stream = msm_isp_vfe_get_stream(
+                    vfe_dev->common_data->dual_vfe_res,
+                    ((vfe_dev->pdev->id == ISP_VFE0) ?
+                    ISP_VFE1 : ISP_VFE0),
+                    HANDLE_TO_IDX(
+                    stream_info->stream_handle));
+            temp_stream->runtime_num_burst_capture--;
+        }
+/* LGE_CHANGE_E, fix broken livesnapshot issue, case#02330340, dongjin.ha */
 	}
 
 	rc = msm_isp_update_deliver_count(vfe_dev, stream_info,
@@ -3407,7 +3435,13 @@ void msm_isp_process_axi_irq(struct vfe_device *vfe_dev,
 					if (comp_info->stream_composite_mask &
 						(1 << wm))
 						msm_isp_cfg_wm_scratch(vfe_dev,
+/* LGE_CHANGE_S, Fix Z-split issue on EIS recording (Case#02341416), 2016-02-17, gayoung85.lee@lge.com */
+#if 0  //QCT orig.
 							wm, pingpong_status);
+#else
+							wm, (pingpong_status >> wm) & 0x1);
+#endif
+/* LGE_CHANGE_E, Fix Z-split issue on EIS recording (Case#02341416), 2016-02-17, gayoung85.lee@lge.com */
 				continue;
 			}
 			stream_idx = HANDLE_TO_IDX(comp_info->stream_handle);
@@ -3427,7 +3461,13 @@ void msm_isp_process_axi_irq(struct vfe_device *vfe_dev,
 				pr_err("%s: Invalid handle for wm irq\n",
 					__func__);
 				msm_isp_cfg_wm_scratch(vfe_dev, i,
+/* LGE_CHANGE_S, Fix Z-split issue on EIS recording (Case#02341416), 2016-02-17, gayoung85.lee@lge.com */
+#if 0  //QCT orig.
 					pingpong_status);
+#else
+					(pingpong_status >> i) & 0x1);
+#endif
+/* LGE_CHANGE_E, Fix Z-split issue on EIS recording (Case#02341416), 2016-02-17, gayoung85.lee@lge.com */
 				continue;
 			}
 			stream_info = &axi_data->stream_info[stream_idx];
