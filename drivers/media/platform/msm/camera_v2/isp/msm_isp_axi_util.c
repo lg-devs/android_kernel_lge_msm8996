@@ -505,10 +505,11 @@ static void msm_isp_cfg_framedrop_reg(struct vfe_device *vfe_dev,
 			framedrop_pattern,
 			framedrop_period);
 
-		stream_info->prev_framedrop_period =
-			(framedrop_period | 0x80000000);
-		vfe0_stream_info->prev_framedrop_period =
-			(framedrop_period | 0x80000000);
+			stream_info->requested_framedrop_period =
+				framedrop_period;
+			vfe0_stream_info->requested_framedrop_period =
+				framedrop_period;
+
 	} else if (RDI_OR_NOT_DUAL_VFE(vfe_dev, stream_info)) {
 		vfe_dev->hw_info->vfe_ops.axi_ops.cfg_framedrop(
 			vfe_dev->vfe_base, stream_info, framedrop_pattern,
@@ -550,13 +551,13 @@ void msm_isp_update_framedrop_reg(struct vfe_device *vfe_dev,
 		if (BURST_STREAM == stream_info->stream_type) {
 			if (0 == stream_info->runtime_num_burst_capture)
 				stream_info->current_framedrop_period =
-					MSM_VFE_STREAM_STOP_PERIOD;
-		}
-
-		if (stream_info->undelivered_request_cnt > 0)
-			stream_info->current_framedrop_period =
 				MSM_VFE_STREAM_STOP_PERIOD;
 
+		}
+ 		if (stream_info->undelivered_request_cnt > 0)
+ 			stream_info->current_framedrop_period =
+ 				MSM_VFE_STREAM_STOP_PERIOD;
+ 
 		/*
 		 * re-configure the period pattern, only if it's not already
 		 * set to what we want

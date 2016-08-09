@@ -53,6 +53,16 @@ static int msm_buf_check_head_sanity(struct msm_isp_bufq *bufq)
 	prev = bufq->head.prev;
 	next = bufq->head.next;
 
+	if (!prev) {
+		pr_err("%s: Error! bufq->head.prev is NULL\n", __func__);
+		return -EINVAL;
+	}
+
+	if (!next) {
+		pr_err("%s: Error! bufq->head.next is NULL\n", __func__);
+		return -EINVAL;
+	}
+
 	if (prev->next != &bufq->head) {
 		pr_err("%s: Error! head prev->next is %p should be %p\n",
 			__func__, prev->next, &bufq->head);
@@ -487,13 +497,7 @@ static int msm_isp_get_buf(struct msm_isp_buf_mgr *buf_mgr, uint32_t id,
 			if (temp_buf_info->state ==
 					MSM_ISP_BUFFER_STATE_QUEUED) {
 				list_del_init(&temp_buf_info->list);
-				if (msm_buf_check_head_sanity(bufq)
-				 < 0) {
-					pr_err("%s buf_handle 0x%x buf_idx %d buf_reuse_flag %d\n",
-					__func__,
-					bufq->bufq_handle,
-					temp_buf_info->buf_idx,
-					temp_buf_info->buf_reuse_flag);
+				if (msm_buf_check_head_sanity(bufq) < 0) {
 					spin_unlock_irqrestore(
 						&bufq->bufq_lock, flags);
 					WARN(1, "%s buf_handle 0x%x buf_idx %d\n",
@@ -558,7 +562,7 @@ static int msm_isp_get_buf(struct msm_isp_buf_mgr *buf_mgr, uint32_t id,
 }
 
 static int msm_isp_put_buf_unsafe(struct msm_isp_buf_mgr *buf_mgr,
-	uint32_t bufq_handle, uint32_t buf_index, unsigned long *flags)
+	uint32_t bufq_handle, uint32_t buf_index)
 {
 	int rc = -1;
 	struct msm_isp_bufq *bufq = NULL;
@@ -581,12 +585,8 @@ static int msm_isp_put_buf_unsafe(struct msm_isp_buf_mgr *buf_mgr,
 	case MSM_ISP_BUFFER_STATE_DEQUEUED:
 		if (BUF_SRC(bufq->stream_id)) {
 			if (!list_empty(&buf_info->list)) {
-				pr_err("%s: buf %x/%x double add\n",
+				WARN(1, "%s: buf %x/%x double add\n",
 					__func__, bufq_handle, buf_index);
-				spin_unlock_irqrestore(&bufq->bufq_lock,
-					*flags);
-				dump_stack();
-				spin_lock_irqsave(&bufq->bufq_lock, *flags);
 				return -EFAULT;
 			}
 			list_add_tail(&buf_info->list, &bufq->head);
@@ -611,13 +611,8 @@ static int msm_isp_put_buf_unsafe(struct msm_isp_buf_mgr *buf_mgr,
 	case MSM_ISP_BUFFER_STATE_QUEUED:
 	case MSM_ISP_BUFFER_STATE_DIVERTED:
 	default:
-		pr_err("%s: incorrect state = %d",
-			__func__, buf_info->state);
-		pr_err("%s: buf %x/%x bad state transition\n",
-			__func__, bufq_handle, buf_index);
-		spin_unlock_irqrestore(&bufq->bufq_lock, *flags);
-		dump_stack();
-		spin_lock_irqsave(&bufq->bufq_lock, *flags);
+		WARN(1, "%s: bufq 0x%x, buf idx 0x%x, incorrect state = %d",
+			__func__, bufq_handle, buf_index, buf_info->state);
 		return -EFAULT;
 	}
 
@@ -646,7 +641,7 @@ static int msm_isp_put_buf(struct msm_isp_buf_mgr *buf_mgr,
 
 	spin_lock_irqsave(&bufq->bufq_lock, flags);
 
-	rc = msm_isp_put_buf_unsafe(buf_mgr, bufq_handle, buf_index, &flags);
+	rc = msm_isp_put_buf_unsafe(buf_mgr, bufq_handle, buf_index);
 
 	spin_unlock_irqrestore(&bufq->bufq_lock, flags);
 
@@ -787,7 +782,7 @@ static int msm_isp_buf_done(struct msm_isp_buf_mgr *buf_mgr,
 	if (state == MSM_ISP_BUFFER_STATE_DIVERTED) {
 		buf_info->state = MSM_ISP_BUFFER_STATE_PREPARED;
 		rc = msm_isp_put_buf_unsafe(buf_mgr, buf_info->bufq_handle,
-					buf_info->buf_idx, &flags);
+			buf_info->buf_idx);
 		if (rc < 0)
 			pr_err("%s: Buf put failed\n", __func__);
 	}
@@ -822,7 +817,7 @@ static int msm_isp_flush_buf(struct msm_isp_buf_mgr *buf_mgr, uint32_t id,
 			buf_info->state == MSM_ISP_BUFFER_STATE_DIVERTED) {
 			buf_info->state = MSM_ISP_BUFFER_STATE_PREPARED;
 			msm_isp_put_buf_unsafe(buf_mgr,
-					bufq_handle, buf_info->buf_idx, &flags);
+					bufq_handle, buf_info->buf_idx);
 		} else if (flush_type == MSM_ISP_BUFFER_FLUSH_ALL) {
 			if (buf_info->state == MSM_ISP_BUFFER_STATE_DIVERTED) {
 				CDBG("%s: no need to queue Diverted buffer\n",
