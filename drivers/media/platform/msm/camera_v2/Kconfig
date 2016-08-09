@@ -263,3 +263,9 @@ config LGE_CAMERA_DRIVER
 	depends on MSMB_CAMERA
     ---help---
       This flag enables support for LG Camera
+
+config LGE_EEPROM
+	bool "LG Camera EEPROM Support"
+	depends on MSM_EEPROM
+    ---help---
+      This flag enables support for LG Camera
