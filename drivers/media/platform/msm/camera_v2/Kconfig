@@ -122,6 +122,15 @@ config MSM_ISPIF_V2
           of any CID of CSID can be routed to of pixel
           or raw data interface in VFE.
 
+config IMX234
+	bool "Sensor IMX234 (BAYER 16M)"
+	depends on MSMB_CAMERA
+	---help---
+		Sony 16 MP Bayer Sensor with auto focus, uses
+		4 mipi lanes full resolution @30fps and
+		HFR @60fps and @120fps,
+		Video HDR support.
+
 config IMX134
 	bool "Sensor IMX134 (BAYER 8M)"
 	depends on MSMB_CAMERA
