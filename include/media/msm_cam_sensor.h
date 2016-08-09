@@ -219,6 +219,22 @@ struct msm_sensor_info_t {
 	enum camb_position_t position;
 };
 
+#ifdef CONFIG_LG_OIS
+struct msm_ois_info_t{
+	char ois_provider[MAX_SENSOR_NAME];
+	int16_t gyro[2];
+	int16_t target[2];
+	int16_t hall[2];
+	uint8_t is_stable;
+};
+
+enum ois_ver_t {
+	OIS_VER_RELEASE,
+	OIS_VER_CALIBRATION,
+	OIS_VER_DEBUG
+};
+#endif
+
 struct camera_vreg_t {
 	const char *reg_name;
 	int min_voltage;
@@ -450,6 +466,22 @@ enum msm_actuator_cfg_type_t {
 	CFG_ACTUATOR_INIT,
 };
 
+#ifdef CONFIG_LG_OIS
+enum msm_ois_cfg_type_t {
+	CFG_OIS_INIT,
+	CFG_GET_OIS_INFO,
+	CFG_OIS_POWERDOWN,
+	CFG_OIS_INI_SET,
+	CFG_OIS_ENABLE,
+	CFG_OIS_DISABLE,
+	CFG_OIS_POWERUP,
+	CFG_OIS_CONTROL,
+	CFG_OIS_I2C_WRITE_SEQ_TABLE,
+	CFG_OIS_SET_MODE,
+	CFG_OIS_MOVE_LENS,
+	CFG_OIS_PWM_MODE,
+};
+#else //QCT Original
 enum msm_ois_cfg_type_t {
 	CFG_OIS_INIT,
 	CFG_OIS_POWERDOWN,
@@ -457,6 +489,7 @@ enum msm_ois_cfg_type_t {
 	CFG_OIS_CONTROL,
 	CFG_OIS_I2C_WRITE_SEQ_TABLE,
 };
+#endif
 
 enum msm_ois_i2c_operation {
 	MSM_OIS_WRITE = 0,
@@ -484,6 +517,10 @@ struct msm_ois_params_t {
 
 struct msm_ois_set_info_t {
 	struct msm_ois_params_t ois_params;
+#ifdef CONFIG_LG_OIS
+	struct msm_ois_info_t *ois_info;
+	void	*setting;
+#endif
 };
 
 struct msm_actuator_move_params_t {
@@ -764,6 +801,10 @@ struct msm_ois_params_t32 {
 
 struct msm_ois_set_info_t32 {
 	struct msm_ois_params_t32 ois_params;
+#ifdef CONFIG_LG_OIS
+	compat_uptr_t ois_info;
+	compat_uptr_t setting;
+#endif
 };
 
 struct msm_ois_cfg_data32 {

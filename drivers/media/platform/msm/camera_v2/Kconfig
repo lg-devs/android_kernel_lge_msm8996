@@ -269,3 +269,9 @@ config LGE_EEPROM
 	depends on MSM_EEPROM
     ---help---
       This flag enables support for LG Camera
+
+config LG_OIS
+	bool "LG Camera OIS support"
+	depends on MSMB_CAMERA
+	---help---
+	Enable support for ois for LG Camera.
