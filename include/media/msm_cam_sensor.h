@@ -464,6 +464,8 @@ enum msm_sensor_cfg_type_t {
 	CFG_WRITE_I2C_ARRAY_ASYNC,
 	CFG_WRITE_I2C_ARRAY_SYNC,
 	CFG_WRITE_I2C_ARRAY_SYNC_BLOCK,
+	CFG_SET_PREVIEW_TUNE_ON,
+	CFG_SET_PREVIEW_TUNE_OFF,
 };
 
 enum msm_actuator_cfg_type_t {

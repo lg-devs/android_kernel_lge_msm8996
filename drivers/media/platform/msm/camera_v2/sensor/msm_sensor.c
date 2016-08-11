@@ -21,6 +21,12 @@
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
 
+#if defined(CONFIG_LGE_CAM_PREVIEW_TUNE)
+#define CAM_PREVIEW_TUNE_ON 1
+#define CAM_PREVIEW_TUNE_OFF 0
+extern int pp_set_cam_preview_tune_status(int flag);
+#endif
+
 static struct v4l2_file_operations msm_sensor_v4l2_subdev_fops;
 static void msm_sensor_adjust_mclk(struct msm_camera_power_ctrl_t *ctrl)
 {
@@ -954,6 +960,11 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 
 		kfree(s_ctrl->stop_setting.reg_setting);
 		s_ctrl->stop_setting.reg_setting = NULL;
+#if defined(CONFIG_LGE_CAM_PREVIEW_TUNE)
+		pr_err("CAM_PREVIEW_TUNE_OFF\n");
+		pp_set_cam_preview_tune_status(CAM_PREVIEW_TUNE_OFF);
+#endif
+
 		if (s_ctrl->sensor_state != MSM_SENSOR_POWER_UP) {
 			pr_err("%s:%d failed: invalid state %d\n", __func__,
 				__LINE__, s_ctrl->sensor_state);
@@ -1060,6 +1071,20 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 		}
 		break;
 	}
+	case CFG_SET_PREVIEW_TUNE_ON: {
+#if defined(CONFIG_LGE_CAM_PREVIEW_TUNE)
+	pr_err("CAM_PREVIEW_TUNE_ON\n");
+	pp_set_cam_preview_tune_status(CAM_PREVIEW_TUNE_ON);
+#endif
+	}
+	break;
+	case CFG_SET_PREVIEW_TUNE_OFF: {
+#if defined(CONFIG_LGE_CAM_PREVIEW_TUNE)
+	pr_err("CAM_PREVIEW_TUNE_OFF\n");
+	pp_set_cam_preview_tune_status(CAM_PREVIEW_TUNE_OFF);
+#endif
+	}
+	break;
 
 	default:
 		rc = -EFAULT;
