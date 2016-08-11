@@ -21,6 +21,7 @@
 #include "camera.h"
 #include "msm_cci.h"
 #include "msm_camera_dt_util.h"
+#include <soc/qcom/lge/board_lge.h>
 
 /* Logging macro */
 #undef CDBG
