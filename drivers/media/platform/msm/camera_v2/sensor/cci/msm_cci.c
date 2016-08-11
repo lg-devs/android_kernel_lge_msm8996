@@ -68,6 +68,8 @@ static void msm_cci_dump_registers(struct cci_device *cci_dev,
 	uint32_t i = 0;
 	uint32_t reg_offset = 0;
 
+	dump_stack();
+
 	/* CCI Top Registers */
 	CCI_DBG(" **** %s : %d CCI TOP Registers ****\n", __func__, __LINE__);
 	for (i = 0; i < DEBUG_TOP_REG_COUNT; i++) {
