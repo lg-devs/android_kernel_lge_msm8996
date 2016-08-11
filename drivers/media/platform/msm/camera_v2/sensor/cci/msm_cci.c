@@ -173,6 +173,11 @@ static void msm_cci_flush_queue(struct cci_device *cci_dev,
 {
 	int32_t rc = 0;
 
+	if (cci_dev->cci_state != CCI_STATE_ENABLED) {
+		pr_err("%s invalid cci state %d\n",
+			__func__, cci_dev->cci_state);
+		return;
+	}
 	msm_camera_io_w_mb(1 << master, cci_dev->base + CCI_HALT_REQ_ADDR);
 	rc = wait_for_completion_timeout(
 		&cci_dev->cci_master_info[master].reset_complete, CCI_TIMEOUT);
