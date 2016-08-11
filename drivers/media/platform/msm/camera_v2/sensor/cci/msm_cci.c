@@ -1562,9 +1562,15 @@ static int32_t msm_cci_config(struct v4l2_subdev *sd,
 	switch (cci_ctrl->cmd) {
 	case MSM_CCI_INIT:
 		rc = msm_cci_init(sd, cci_ctrl);
+		if(!rc)
+			cci_ctrl->cci_info->cci_acquired = 1;
 		break;
 	case MSM_CCI_RELEASE:
-		rc = msm_cci_release(sd);
+		if(cci_ctrl->cci_info) {
+			if(cci_ctrl->cci_info->cci_acquired)
+				rc = msm_cci_release(sd);
+			cci_ctrl->cci_info->cci_acquired = 0;
+		}
 		break;
 	case MSM_CCI_I2C_READ:
 		rc = msm_cci_i2c_read_bytes(sd, cci_ctrl);
@@ -1711,6 +1717,7 @@ static long msm_cci_subdev_ioctl(struct v4l2_subdev *sd,
 		break;
 	case MSM_SD_SHUTDOWN: {
 		struct msm_camera_cci_ctrl ctrl_cmd;
+		ctrl_cmd.cci_info = NULL;
 		ctrl_cmd.cmd = MSM_CCI_RELEASE;
 		rc = msm_cci_config(sd, &ctrl_cmd);
 		break;
