@@ -195,6 +195,17 @@ static inline int __msm_queue_find_command_ack_q(void *d1, void *d2)
 	return (ack->stream_id == *(unsigned int *)d2) ? 1 : 0;
 }
 
+static inline bool msm_event_subscribed(
+               struct v4l2_fh *fh, u32 type, u32 id)
+{
+	struct v4l2_subscribed_event *sev;
+	assert_spin_locked(&fh->vdev->fh_lock);
+
+	list_for_each_entry(sev, &fh->subscribed, list)
+		if (sev->type == type && sev->id == id)
+			return true;
+	return false;
+}
 
 struct msm_session *msm_session_find(unsigned int session_id)
 {
@@ -726,6 +737,7 @@ int msm_post_event(struct v4l2_event *event, int timeout)
 	struct msm_command *cmd;
 	int session_id, stream_id;
 	unsigned long flags = 0;
+	struct v4l2_fh *fh;
 
 	session_id = event_data->session_id;
 	stream_id = event_data->stream_id;
@@ -741,6 +753,25 @@ int msm_post_event(struct v4l2_event *event, int timeout)
 
 	vdev = msm_eventq->vdev;
 
+	if(event->id == MSM_CAMERA_NEW_SESSION) {
+		spin_lock_irqsave(&vdev->fh_lock, flags);
+		fh = (struct v4l2_fh *)vdev->fh_list.next;
+		if(!msm_event_subscribed(fh, event->type, event->id)) {
+			pr_err("%s :%d v4l2 events not subscribed yet! type(0x%x) id(0x%x)\n",
+				__func__, __LINE__, event->type, event->id);
+			spin_unlock_irqrestore(&vdev->fh_lock, flags);
+			return -EIO;
+		}
+		spin_unlock_irqrestore(&vdev->fh_lock, flags);
+		if(BIT_ISSET(msm_debug, LGE_DEBUG_BLOCK_POST_EVENT))
+			BIT_CLR(msm_debug, LGE_DEBUG_BLOCK_POST_EVENT);
+	}
+
+	if(BIT_ISSET(msm_debug, LGE_DEBUG_BLOCK_POST_EVENT)) {
+		pr_err("%s:%d] blocking events while restarting qcamsvr\n",
+			__func__, __LINE__);
+		return rc;
+	}
 	/* send to imaging server and wait for ACK */
 	session = msm_queue_find(msm_session_q, struct msm_session,
 		list, __msm_queue_find_session, &session_id);
