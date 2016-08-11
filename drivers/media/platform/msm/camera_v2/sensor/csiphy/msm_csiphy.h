@@ -20,9 +20,16 @@
 #include <media/msm_cam_sensor.h>
 #include "msm_sd.h"
 #include "msm_camera_io_util.h"
+#include <linux/timer.h>
+#define CSIPHY_ENABLE_IRQ_TIMEOUT	2000
 
 #define MAX_CSIPHY 3
 #define CSIPHY_NUM_CLK_MAX  16
+
+struct msm_csiphy_timer_t {
+	atomic_t used;
+	struct timer_list timer;
+};
 
 struct csiphy_reg_t {
 	uint32_t addr;
@@ -162,6 +169,7 @@ struct csiphy_device {
 	uint8_t csiphy_3phase;
 	uint8_t num_irq_registers;
 	uint32_t csiphy_sof_debug;
+	struct msm_csiphy_timer_t csiphy_timer;
 };
 
 #define VIDIOC_MSM_CSIPHY_RELEASE \
