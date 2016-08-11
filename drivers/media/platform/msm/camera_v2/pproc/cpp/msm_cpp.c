@@ -1569,6 +1569,10 @@ static int msm_cpp_notify_frame_done(struct cpp_device *cpp_dev,
 
 	frame_qcmd = msm_dequeue(queue, list_frame, POP_FRONT);
 	if (frame_qcmd) {
+		if(put_buf &&  atomic_read(&frame_qcmd->on_heap)) {
+			pr_err("%s: frame_qcmd(%p) is on heap \n", __func__, frame_qcmd);
+			return rc;
+		}
 		processed_frame = frame_qcmd->command;
 		do_gettimeofday(&(processed_frame->out_time));
 		kfree(frame_qcmd);
@@ -1977,7 +1981,7 @@ static int msm_cpp_send_frame_to_hardware(struct cpp_device *cpp_dev,
 		pr_err("process queue full. drop frame\n");
 		goto end;
 	}
-
+	return rc;
 dequeue_frame:
 	if (rc < 0) {
 		qcmd = msm_dequeue(&cpp_dev->processing_q, list_frame,
@@ -1995,6 +1999,7 @@ dequeue_frame:
 		}
 	}
 end:
+	atomic_set(&frame_qcmd->on_heap, 0);
 	return rc;
 }
 

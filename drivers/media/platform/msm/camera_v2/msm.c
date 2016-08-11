@@ -32,6 +32,7 @@
 #include "cam_hw_ops.h"
 #include <media/msmb_generic_buf_mgr.h>
 
+static uint8_t msm_debug;
 
 static struct v4l2_device *msm_v4l2_dev;
 static struct list_head    ordered_sd_list;
@@ -816,30 +817,32 @@ int msm_post_event(struct v4l2_event *event, int timeout)
 				__func__, __LINE__);
 		return rc;
 	}
+	if(unlikely(BIT_ISSET(msm_debug, LGE_DEBUG_DISABLE_TIMEOUT))) {
+		msm_print_event_error(event);
+		wait_for_completion(&cmd_ack->wait_complete);
+	} else {
+		/* should wait on session based condition */
+		rc = wait_for_completion_timeout(&cmd_ack->wait_complete,
+				msecs_to_jiffies(timeout));
 
-	/* should wait on session based condition */
-	rc = wait_for_completion_timeout(&cmd_ack->wait_complete,
-			msecs_to_jiffies(timeout));
-
-
-	if (list_empty_careful(&cmd_ack->command_q.list)) {
-		if (!rc) {
-			pr_err("%s: Timed out\n", __func__);
-			msm_print_event_error(event);
-			mutex_unlock(&session->lock);
-			BUG_ON(unlikely(BIT_ISSET(msm_debug, LGE_DEBUG_PANIC_ON_TIMEOUT)));
-			dump_stack();
-			msm_shutdown_imaging_server(vdev);
-			return -ETIMEDOUT;
-		} else {
-			pr_err("%s: Error: No timeout but list empty!",
-					__func__);
-			msm_print_event_error(event);
-			mutex_unlock(&session->lock);
-			return -EINVAL;
+		if (list_empty_careful(&cmd_ack->command_q.list)) {
+			if (!rc) {
+				pr_err("%s: Timed out\n", __func__);
+				msm_print_event_error(event);
+				mutex_unlock(&session->lock);
+				BUG_ON(unlikely(BIT_ISSET(msm_debug, LGE_DEBUG_PANIC_ON_TIMEOUT)));
+				dump_stack();
+				msm_shutdown_imaging_server(vdev);
+				return -ETIMEDOUT;
+			} else {
+				pr_err("%s: Error: No timeout but list empty!",
+						__func__);
+				msm_print_event_error(event);
+				mutex_unlock(&session->lock);
+				return -EINVAL;
+			}
 		}
 	}
-
 	cmd = msm_dequeue(&cmd_ack->command_q,
 		struct msm_command, list);
 	if (!cmd) {
@@ -1077,6 +1080,53 @@ static void msm_sd_notify(struct v4l2_subdev *sd,
 	}
 }
 
+static int msm_config_debugfs_get(void *data, u64 *val)
+{
+       *val = msm_debug;
+       return 0;
+}
+
+static int msm_config_debugfs_set(void  *data, u64 val)
+{
+	uint32_t key = LGE_DEBUG_PANIC_ON_TIMEOUT
+			^ LGE_DEBUG_DISABLE_TIMEOUT;
+	if(!val) {
+		pr_err("clear all bits \n");
+		msm_debug = 0;
+		return 0;
+	} else if(val > LGE_DEBUG_PANIC_ON_TIMEOUT) {
+		pr_err("bit(%d) is either reserved or disallowed\n",(int)val);
+		return 0;
+	} else {
+		pr_err("bit(%d) is set(prev(%x) \n", (int)val, msm_debug);
+		if(BIT_ISSET(msm_debug, LGE_DEBUG_DISABLE_TIMEOUT)
+			||BIT_ISSET(msm_debug, LGE_DEBUG_PANIC_ON_TIMEOUT)) {
+			BIT_CLR(msm_debug, (val^key));
+		}
+		BIT_SET(msm_debug, (uint8_t)val);
+	}
+	return 0;
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(msm_config_debugfs, msm_config_debugfs_get,
+       msm_config_debugfs_set, "%llu\n");
+
+static int msm_config_create_debugfs(struct video_device *ctrl_t)
+{
+	struct dentry *debugfs_base;
+	char dirname[32] = {0};
+
+	snprintf(dirname, sizeof(dirname), "msm-config");
+	debugfs_base = debugfs_create_dir(dirname, NULL);
+	if (!debugfs_base)
+		return -ENOMEM;
+	if (!debugfs_create_file("timeout", S_IRUGO | S_IWUSR, debugfs_base,
+		ctrl_t, &msm_config_debugfs))
+		return -ENOMEM;
+
+	return 0;
+}
+
 static ssize_t write_logsync(struct file *file, const char __user *buf,
 		size_t count, loff_t *ppos)
 {
@@ -1180,7 +1230,8 @@ static int msm_probe(struct platform_device *pdev)
 	msm_session_q = kzalloc(sizeof(*msm_session_q), GFP_KERNEL);
 	if (WARN_ON(!msm_session_q))
 		goto v4l2_fail;
-
+	msm_config_create_debugfs(pvdev->vdev);
+	msm_debug = 0;
 	msm_init_queue(msm_session_q);
 	spin_lock_init(&msm_eventq_lock);
 	spin_lock_init(&msm_pid_lock);

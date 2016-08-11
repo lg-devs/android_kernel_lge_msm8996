@@ -29,6 +29,14 @@
 #include <media/videobuf2-dma-contig.h>
 #include <media/msmb_camera.h>
 
+#include <linux/debugfs.h>
+#define LGE_DEBUG_DISABLE_TIMEOUT	1
+#define LGE_DEBUG_PANIC_ON_TIMEOUT	2
+#define LGE_DEBUG_BLOCK_POST_EVENT	7
+#define BIT_SET( x, idx )    ( x |= 1<<(idx&7))
+#define BIT_ISSET( x, idx )  ( x & (1<<(idx&7)))
+#define BIT_CLR( x, idx )    ( x &= ~(1<<(idx&7)))
+
 /* Setting MAX timeout to 6.5seconds considering
  * backend will operate @ .6fps in certain usecases
  * like Long exposure usecase and isp needs max of 2 frames
