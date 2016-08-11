@@ -723,6 +723,20 @@ static void msm_print_event_error(struct v4l2_event *event)
 		event_data->arg_value);
 }
 
+void msm_shutdown_imaging_server(struct video_device *vdev) {
+	struct v4l2_event event;
+	pr_err("%s: sending event to shutdown qcamsvr\n",__func__);
+
+	event.type = MSM_CAMERA_V4L2_EVENT_TYPE;
+	event.id = MSM_CAMERA_SHUTDOWN;
+	v4l2_event_queue(vdev, &event);
+	BIT_SET(msm_debug, LGE_DEBUG_BLOCK_POST_EVENT);
+
+	/* send v4l2_event to HAL next*/
+	msm_queue_traverse_action(msm_session_q, struct msm_session, list,
+		__msm_close_destry_session_notify_apps, NULL);
+}
+
 /* something seriously wrong if msm_close is triggered
  *   !!! user space imaging server is shutdown !!!
  */
@@ -813,6 +827,9 @@ int msm_post_event(struct v4l2_event *event, int timeout)
 			pr_err("%s: Timed out\n", __func__);
 			msm_print_event_error(event);
 			mutex_unlock(&session->lock);
+			BUG_ON(unlikely(BIT_ISSET(msm_debug, LGE_DEBUG_PANIC_ON_TIMEOUT)));
+			dump_stack();
+			msm_shutdown_imaging_server(vdev);
 			return -ETIMEDOUT;
 		} else {
 			pr_err("%s: Error: No timeout but list empty!",
