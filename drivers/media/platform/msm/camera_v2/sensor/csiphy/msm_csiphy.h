@@ -169,6 +169,7 @@ struct csiphy_device {
 	uint8_t csiphy_3phase;
 	uint8_t num_irq_registers;
 	uint32_t csiphy_sof_debug;
+	struct regulator* csiphy_reg;
 	struct msm_csiphy_timer_t csiphy_timer;
 };
 

@@ -809,6 +809,13 @@ static int msm_csiphy_init(struct csiphy_device *csiphy_dev)
 		pr_err("%s: failed to vote for AHB\n", __func__);
 		return rc;
 	}
+	if ( csiphy_dev->csiphy_reg &&
+		!regulator_is_enabled(csiphy_dev->csiphy_reg)) {
+		pr_err("%s: csiphy reg is either null or down \n", __func__);
+		csiphy_dev->ref_count--;
+		rc = -EINVAL;
+		goto ioremap_fail;
+	}
 
 	csiphy_dev->base = ioremap(csiphy_dev->mem->start,
 		resource_size(csiphy_dev->mem));
@@ -1029,12 +1036,17 @@ static int msm_csiphy_release(struct csiphy_device *csiphy_dev, void *arg)
 	}
 
 	if (csiphy_dev->csiphy_3phase == CSI_3PHASE_HW) {
-		msm_camera_io_w(0x0,
-			csiphy_dev->base + csiphy_dev->ctrl_reg->csiphy_3ph_reg.
-			mipi_csiphy_3ph_cmn_ctrl5.addr);
-		msm_camera_io_w(0x0,
-			csiphy_dev->base + csiphy_dev->ctrl_reg->csiphy_3ph_reg.
-			mipi_csiphy_3ph_cmn_ctrl6.addr);
+		if ( csiphy_dev->csiphy_reg &&
+			regulator_is_enabled(csiphy_dev->csiphy_reg)) {
+			msm_camera_io_w(0x0,
+				csiphy_dev->base + csiphy_dev->ctrl_reg->csiphy_3ph_reg.
+				mipi_csiphy_3ph_cmn_ctrl5.addr);
+			msm_camera_io_w(0x0,
+				csiphy_dev->base + csiphy_dev->ctrl_reg->csiphy_3ph_reg.
+				mipi_csiphy_3ph_cmn_ctrl6.addr);
+		} else {
+		       pr_err("%s: csiphy reg is either null or down \n", __func__);
+		}
 	} else	if (csiphy_dev->hw_version < CSIPHY_VERSION_V30) {
 		csiphy_dev->lane_mask[csiphy_dev->pdev->id] = 0;
 		for (i = 0; i < 4; i++)
@@ -1442,6 +1454,9 @@ static int csiphy_probe(struct platform_device *pdev)
 		new_csiphy_dev->ctrl_reg->csiphy_reg = csiphy_v3_5;
 		new_csiphy_dev->hw_dts_version = CSIPHY_VERSION_V35;
 		new_csiphy_dev->csiphy_3phase = CSI_3PHASE_HW;
+		new_csiphy_dev->csiphy_reg = regulator_get(&pdev->dev, "gdscr");
+		if (!new_csiphy_dev->csiphy_reg)
+			pr_err("%s: failed to get gdscr which is null\n", __func__);
 	} else {
 		pr_err("%s:%d, invalid hw version : 0x%x\n", __func__, __LINE__,
 		new_csiphy_dev->hw_dts_version);
