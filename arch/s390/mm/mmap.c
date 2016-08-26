@@ -183,10 +183,7 @@ unsigned long randomize_et_dyn(void)
 {
 	unsigned long base;
 
-	base = STACK_TOP / 3 * 2;
-	if (!is_32bit_task())
-		/* Align to 4GB */
-		base &= ~((1UL << 32) - 1);
+	base = (STACK_TOP / 3 * 2) & (~mmap_align_mask << PAGE_SHIFT);
 	return base + mmap_rnd();
 }
 
