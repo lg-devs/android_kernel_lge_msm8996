@@ -163,8 +163,8 @@ extern unsigned int vdso_enabled;
    the loader.  We need to make sure that it is out of the way of the program
    that it will "exec", and that there is sufficient room for the brk.  */
 
-extern unsigned long randomize_et_dyn(void);
-#define ELF_ET_DYN_BASE		randomize_et_dyn()
+extern unsigned long randomize_et_dyn(unsigned long base);
+#define ELF_ET_DYN_BASE		(randomize_et_dyn(STACK_TOP / 3 * 2))
 
 /* This yields a mask that user programs can use to figure out what
    instruction set this CPU supports. */
@@ -209,9 +209,7 @@ do {								\
 } while (0)
 #endif /* CONFIG_COMPAT */
 
-extern unsigned long mmap_rnd_mask;
-
-#define STACK_RND_MASK	(mmap_rnd_mask)
+#define STACK_RND_MASK	0x7ffUL
 
 #define ARCH_DLINFO							    \
 do {									    \
