@@ -49,14 +49,15 @@ static int mmap_is_legacy(void)
 
 static unsigned long mmap_rnd(void)
 {
-	unsigned long rnd;
+	unsigned long rnd = 0;
 
-	rnd = (unsigned long)get_random_int() & STACK_RND_MASK;
+	if (current->flags & PF_RANDOMIZE)
+		rnd = (long)get_random_int() & STACK_RND_MASK;
 
 	return rnd << PAGE_SHIFT;
 }
 
-static unsigned long mmap_base(unsigned long rnd)
+static unsigned long mmap_base(void)
 {
 	unsigned long gap = rlimit(RLIMIT_STACK);
 
@@ -65,7 +66,7 @@ static unsigned long mmap_base(unsigned long rnd)
 	else if (gap > MAX_GAP)
 		gap = MAX_GAP;
 
-	return PAGE_ALIGN(STACK_TOP - gap - rnd);
+	return PAGE_ALIGN(STACK_TOP - gap - mmap_rnd());
 }
 
 /*
@@ -74,20 +75,15 @@ static unsigned long mmap_base(unsigned long rnd)
  */
 void arch_pick_mmap_layout(struct mm_struct *mm)
 {
-	unsigned long random_factor = 0UL;
-
-	if (current->flags & PF_RANDOMIZE)
-		random_factor = mmap_rnd();
-
 	/*
 	 * Fall back to the standard layout if the personality bit is set, or
 	 * if the expected stack growth is unlimited:
 	 */
 	if (mmap_is_legacy()) {
-		mm->mmap_base = TASK_UNMAPPED_BASE + random_factor;
+		mm->mmap_base = TASK_UNMAPPED_BASE;
 		mm->get_unmapped_area = arch_get_unmapped_area;
 	} else {
-		mm->mmap_base = mmap_base(random_factor);
+		mm->mmap_base = mmap_base();
 		mm->get_unmapped_area = arch_get_unmapped_area_topdown;
 	}
 }
