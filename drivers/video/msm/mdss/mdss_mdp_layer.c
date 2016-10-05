@@ -528,7 +528,7 @@ static int __configure_pipe_params(struct msm_fb_data_type *mfd,
 		mixer->ctl->border_x_off, mixer->ctl->border_y_off);
 
 	if (layer->flags & SCALER_ENABLED)
-		memcpy(&pipe->scale, layer->scale,
+		memcpy(&pipe->scaler, layer->scale,
 			sizeof(struct mdp_scale_data));
 
 	pipe->scaler.enable = (layer->flags & SCALER_ENABLED);
