@@ -34,9 +34,9 @@
  * To allow proper structure padding for 64bit/32bit target
  */
 #ifdef __LP64
-#define MDP_LAYER_COMMIT_V1_PAD 4
+#define MDP_LAYER_COMMIT_V1_PAD 3
 #else
-#define MDP_LAYER_COMMIT_V1_PAD 5
+#define MDP_LAYER_COMMIT_V1_PAD 4
 #endif
 
 /**********************************************************************
@@ -439,6 +439,17 @@ struct mdp_layer_commit_v1 {
 
 	/* FRC info per device which contains frame count and timestamp */
 	struct mdp_frc_info __user *frc_info;
+	/*
+	 * Scaler data and control for setting up destination scaler.
+	 * A userspace pointer that points to a list of
+	 * struct mdp_destination_scaler_data.
+	 */
+	void __user		*dest_scaler;
+
+	/*
+	 * Represents number of Destination scaler data provied by userspace.
+	 */
+	uint32_t		dest_scaler_cnt;
 
 	/*
 	 * Scaler data and control for setting up destination scaler.
