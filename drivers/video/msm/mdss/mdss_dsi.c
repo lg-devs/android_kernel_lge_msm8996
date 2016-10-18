@@ -34,6 +34,10 @@
 #define XO_CLK_RATE	19200000
 #define CMDLINE_DSI_CTL_NUM_STRING_LEN 2
 
+#if defined(CONFIG_LGE_DISPLAY_AOD_SUPPORTED)
+#include "oem_mdss_aod.h"
+#endif
+
 /* Master structure to hold all the information about the DSI/panel */
 static struct mdss_dsi_data *mdss_dsi_res;
 
