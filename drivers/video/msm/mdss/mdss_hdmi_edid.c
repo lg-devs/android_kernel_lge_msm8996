@@ -30,6 +30,11 @@
  */
 #define MAX_DATA_BLOCK_SIZE 31
 
+#ifdef DEV_DBG
+#undef DEV_DBG
+#define DEV_DBG(fmt, args...)  pr_err(fmt, ##args)
+#endif
+
 #define HDMI_VSDB_3D_EVF_DATA_OFFSET(vsd) \
 	(!((vsd)[8] & BIT(7)) ? 9 : (!((vsd)[8] & BIT(6)) ? 11 : 13))
 
@@ -66,6 +71,7 @@
 #define EDID_VENDOR_ID_SIZE     4
 #define EDID_IEEE_REG_ID        0x0c03
 
+#define LGE_TEMP_PATCH_FOR_4K_OUT_FORMAT_TO_RGB
 enum edid_sink_mode {
 	SINK_MODE_DVI,
 	SINK_MODE_HDMI
@@ -143,7 +149,6 @@ struct hdmi_edid_ctrl {
 	struct hdmi_edid_init_data init_data;
 	struct hdmi_edid_sink_caps sink_caps;
 };
-
 #ifdef CONFIG_SLIMPORT_COMMON
 int hdmi_edid_reset_parser(void *input)
 {
@@ -711,6 +716,7 @@ static const u8 *hdmi_edid_find_block(const u8 *in_buf, u32 start_offset,
 	return NULL;
 } /* hdmi_edid_find_block */
 
+#ifndef LGE_TEMP_PATCH_FOR_4K_OUT_FORMAT_TO_RGB
 static void hdmi_edid_set_y420_support(struct hdmi_edid_ctrl *edid_ctrl,
 				  u32 video_format)
 {
@@ -876,6 +882,7 @@ static void hdmi_edid_parse_hvdb(struct hdmi_edid_ctrl *edid_ctrl,
 	sink_caps->osd_disparity = (in_buf[4] * 0x01) ? true : false;
 
 }
+#endif
 
 static void hdmi_edid_extract_extended_data_blocks(
 	struct hdmi_edid_ctrl *edid_ctrl, const u8 *in_buf)
@@ -938,6 +945,7 @@ static void hdmi_edid_extract_extended_data_blocks(
 				edid_ctrl->it_scan_info,
 				edid_ctrl->ce_scan_info);
 			break;
+#ifndef LGE_TEMP_PATCH_FOR_4K_OUT_FORMAT_TO_RGB
 		case HDMI_VIDEO_DATA_BLOCK:
 			/* HDMI Video data block defined in HDMI 2.0 */
 			DEV_DBG("%s: EDID: HVDB found\n", __func__);
@@ -953,6 +961,7 @@ static void hdmi_edid_extract_extended_data_blocks(
 				__func__, etag[2]);
 			hdmi_edid_parse_Y420VDB(edid_ctrl, etag);
 			break;
+#endif
 		default:
 			DEV_DBG("%s: Tag Code %d not supported\n",
 				__func__, etag[1]);
@@ -1905,6 +1914,10 @@ static void hdmi_edid_get_display_mode(struct hdmi_edid_ctrl *edid_ctrl)
 			 * while the Video identification code is 1 based in the
 			 * CEA_861D spec
 			 */
+			 /* Add LG VR SVD LGE_S */
+			video_format = (*svd & 0xFF);
+			if (video_format < LGVR_OFF(1) || video_format > LGVR_VFRMT_END)
+			 /* Add LG VR SVD LGE_E */
 			video_format = (*svd & 0x7F);
 			hdmi_edid_add_sink_video_format(edid_ctrl,
 				video_format);

@@ -39,11 +39,14 @@
 #ifdef CONFIG_SLIMPORT_DYNAMIC_HPD
 #include "mdss_hdmi_slimport.h"
 #endif
-
 #define DRV_NAME "hdmi-tx"
 #define COMPATIBLE_NAME "qcom,hdmi-tx"
 
-#define DEFAULT_VIDEO_RESOLUTION HDMI_VFRMT_640x480p60_4_3
+#ifdef DEV_DBG
+#undef DEV_DBG
+#define DEV_DBG(fmt, args...)  pr_err(fmt, ##args)
+#endif
+#define DEFAULT_VIDEO_RESOLUTION HDMI_VFRMT_1280x720p60_16_9
 #define DEFAULT_HDMI_PRIMARY_RESOLUTION HDMI_VFRMT_1920x1080p60_16_9
 
 #ifdef CONFIG_SLIMPORT_COMMON
@@ -267,6 +270,11 @@ static const struct hdmi_tx_audio_acr_arry hdmi_tx_audio_acr_lut[] = {
 	/*  74.250MHz */
 	{74250, {{4096, 74250}, {6272, 82500}, {6144, 74250}, {12544, 82500},
 		{12288, 74250}, {25088, 82500}, {24576, 74250} } },
+	/* Add LG VR SVD */
+	/*  89MHz  */
+	{89000, {{4096, 89000}, {7056, 1112500}, {6144, 89000} } },
+	/*  93MHz  */
+	{93000, {{4096, 93000}, {4704, 77500}, {6144, 93000} } },
 	/* 148.500MHz */
 	{148500, {{4096, 148500}, {6272, 165000}, {6144, 148500},
 		{12544, 165000}, {12288, 148500}, {25088, 165000},
@@ -401,7 +409,9 @@ static bool hdmi_tx_is_cea_format(int mode)
 {
 	bool cea_fmt;
 
-	if ((mode > 0) && (mode <= HDMI_EVFRMT_END))
+	/* Add LG VR SVD */
+	if (((mode > 0) && (mode <= HDMI_EVFRMT_END)) ||
+		(mode > LGVR_OFF(0) && (mode <= LGVR_VFRMT_END )))
 		cea_fmt = true;
 	else
 		cea_fmt = false;
@@ -1550,7 +1560,9 @@ static u32 hdmi_tx_ddc_read(struct hdmi_tx_ddc_ctrl *ddc_ctrl,
 
 	return status;
 }
+#endif
 
+#ifndef CONFIG_SLIMPORT_COMMON
 static int hdmi_tx_read_edid_retry(struct hdmi_tx_ctrl *hdmi_ctrl, u8 block)
 {
 	u32 checksum_retry = 0;
@@ -3411,7 +3423,6 @@ int msm_hdmi_register_slimport(struct platform_device *pdev,
 	return 0;
 }
 #endif
-
 static int hdmi_tx_get_cable_status(struct platform_device *pdev, u32 vote)
 {
 	struct hdmi_tx_ctrl *hdmi_ctrl = platform_get_drvdata(pdev);
@@ -4024,11 +4035,10 @@ static int hdmi_tx_hpd_on(struct hdmi_tx_ctrl *hdmi_ctrl)
 		hdmi_tx_hpd_polarity_setup(hdmi_ctrl, HPD_CONNECT_POLARITY);
 		DEV_DBG("%s: HPD is now ON\n", __func__);
 	}
-
-	return rc;
 #ifdef CONFIG_SLIMPORT_DYNAMIC_HPD
 	mutex_unlock(&hdmi_ctrl->mutex_hpd);
 #endif
+	return rc;
 } /* hdmi_tx_hpd_on */
 
 static int hdmi_tx_sysfs_enable_hpd(struct hdmi_tx_ctrl *hdmi_ctrl, int on)
@@ -4216,6 +4226,7 @@ static irqreturn_t hdmi_tx_isr(int irq, void *data)
 #else
 		DSS_REG_W(io, HDMI_HPD_INT_CTRL, BIT(0));
 #endif
+		pr_err("%s : tx_isr hpd_int_work\n", __func__); /* temporary adding log print for HDMI core doesn't off */
 
 		/*
 		 * If suspend has already triggered, don't start the hpd work
@@ -4223,9 +4234,7 @@ static irqreturn_t hdmi_tx_isr(int irq, void *data)
 		 * waits for hpd interrupt to finish. Suspend thread will
 		 * eventually reset the HPD module.
 		 */
-		if (hdmi_ctrl->panel_suspend)
-			hdmi_ctrl->hpd_state = 0;
-		else
+		if (!hdmi_ctrl->panel_suspend)
 			queue_work(hdmi_ctrl->workq, &hdmi_ctrl->hpd_int_work);
 	}
 
@@ -4551,14 +4560,13 @@ static int hdmi_tx_panel_event_handler(struct mdss_panel_data *panel_data,
 	case MDSS_EVENT_SUSPEND:
 		mutex_lock(&hdmi_ctrl->power_mutex);
 		if (!hdmi_ctrl->panel_power_on &&
-			!hdmi_ctrl->hpd_off_pending && !hdmi_ctrl->hpd_state) {
+			!hdmi_ctrl->hpd_off_pending) {
 			mutex_unlock(&hdmi_ctrl->power_mutex);
 			if (hdmi_ctrl->hpd_feature_on)
 				hdmi_tx_hpd_off(hdmi_ctrl);
 
 			hdmi_ctrl->panel_suspend = false;
 		} else {
-			hdmi_ctrl->hpd_state = 0;
 			mutex_unlock(&hdmi_ctrl->power_mutex);
 			hdmi_ctrl->hpd_off_pending = true;
 			hdmi_ctrl->panel_suspend = true;
@@ -4567,11 +4575,11 @@ static int hdmi_tx_panel_event_handler(struct mdss_panel_data *panel_data,
 
 	case MDSS_EVENT_BLANK:
 		if (hdmi_tx_is_hdcp_enabled(hdmi_ctrl)) {
-			flush_delayed_work(&hdmi_ctrl->hdcp_cb_work);
-
 			DEV_DBG("%s: Turning off HDCP\n", __func__);
 			hdmi_ctrl->hdcp_ops->hdmi_hdcp_off(
 				hdmi_ctrl->hdcp_data);
+
+			flush_delayed_work(&hdmi_ctrl->hdcp_cb_work);
 
 			hdmi_ctrl->hdcp_ops = NULL;
 
