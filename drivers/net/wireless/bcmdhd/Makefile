@@ -732,6 +732,9 @@ ifneq ($(CONFIG_BCM4330),)
   DHDCFLAGS += -DWAIT_DEQUEUE
 endif
 
+ifeq ($(CONFIG_DHD_DEBUG_ENABLED),y)
+  DHDCFLAGS += -DDHD_DEBUG
+endif
 
 #########
 # Others
@@ -739,7 +742,7 @@ endif
 
 #EXTRA_LDFLAGS += --strip-debug
 
-EXTRA_CFLAGS += $(DHDCFLAGS) -DDHD_DEBUG
+EXTRA_CFLAGS += $(DHDCFLAGS)
 EXTRA_CFLAGS += -DSRCBASE=\"$(src)\"
 EXTRA_CFLAGS += -I$(src)/src/include/
 EXTRA_CFLAGS += -I$(src)/src/dhd/sys/

@@ -3731,7 +3731,7 @@ static struct snd_soc_dai_link msm8996_hdmi_dai_link[] = {
 	},
 };
 
-#if defined(CONFIG_SND_USE_QUAT_MI2S) || defined(CONFIG_SND_LGE_DSDP_DUAL_AUDIO)
+#if defined(CONFIG_SND_USE_QUAT_MI2S) || defined(CONFIG_SND_LGE_DSDP_DUAL_AUDIO) || defined(CONFIG_SND_USE_SEC_MI2S) || defined(CONFIG_SND_USE_TERT_MI2S)
 static struct snd_soc_dai_link msm8996_lge_dai_links[] = {
 #ifdef CONFIG_SND_USE_QUAT_MI2S
 	{
@@ -3817,10 +3817,9 @@ static struct snd_soc_dai_link msm8996_lge_dai_links[] = {
 #endif /* CONFIG_SND_USE_TERT_MI2S */
 
 };
-#endif	/* CONFIG_SND_LGE_DSDP_DUAL_AUDIO */
-#endif	/* CONFIG_SND_USE_QUAT_MI2S || CONFIG_SND_LGE_DSDP_DUAL_AUDIO */
+#endif	/* CONFIG_SND_USE_QUAT_MI2S || CONFIG_SND_LGE_DSDP_DUAL_AUDIO || CONFIG_SND_USE_SEC_MI2S || CONFIG_SND_USE_TERT_MI2S */
 
-#if defined(CONFIG_SND_USE_QUAT_MI2S) || defined(CONFIG_SND_LGE_DSDP_DUAL_AUDIO)
+#if defined(CONFIG_SND_USE_QUAT_MI2S) || defined(CONFIG_SND_LGE_DSDP_DUAL_AUDIO) || defined(CONFIG_SND_USE_SEC_MI2S) || defined(CONFIG_SND_USE_TERT_MI2S)
 static struct snd_soc_dai_link msm8996_tasha_dai_links[
 			 ARRAY_SIZE(msm8996_common_dai_links) +
 			 ARRAY_SIZE(msm8996_tasha_fe_dai_links) +
@@ -3835,7 +3834,7 @@ static struct snd_soc_dai_link msm8996_tasha_dai_links[
 			 ARRAY_SIZE(msm8996_common_be_dai_links) +
 			 ARRAY_SIZE(msm8996_tasha_be_dai_links) +
 			 ARRAY_SIZE(msm8996_hdmi_dai_link)];
-#endif	/* CONFIG_SND_USE_QUAT_MI2S || CONFIG_SND_LGE_DSDP_DUAL_AUDIO */
+#endif	/* CONFIG_SND_USE_QUAT_MI2S || CONFIG_SND_LGE_DSDP_DUAL_AUDIO || CONFIG_SND_USE_SEC_MI2S || CONFIG_SND_USE_TERT_MI2S */
 
 static int msm8996_wsa881x_init(struct snd_soc_component *component)
 {
@@ -4073,7 +4072,7 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 		memcpy(msm8996_tasha_dai_links + len_3,
 		       msm8996_tasha_be_dai_links,
 		       sizeof(msm8996_tasha_be_dai_links));
-#if defined(CONFIG_SND_USE_QUAT_MI2S) || defined(CONFIG_SND_LGE_DSDP_DUAL_AUDIO)
+#if defined(CONFIG_SND_USE_QUAT_MI2S) || defined(CONFIG_SND_LGE_DSDP_DUAL_AUDIO) || defined(CONFIG_SND_USE_SEC_MI2S) || defined(CONFIG_SND_USE_TERT_MI2S)
 		memcpy(msm8996_tasha_dai_links + len_4,
 		       msm8996_lge_dai_links,
 		       sizeof(msm8996_lge_dai_links));

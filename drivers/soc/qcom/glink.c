@@ -2879,7 +2879,7 @@ static int glink_tx_common(void *handle, void *pkt_priv,
 	}
 
 	/* find matching rx intent (best-fit algorithm for now) */
-	if (ch_pop_remote_rx_intent(ctx, size, &riid, &intent_size)) {
+	if (ch_pop_remote_rx_intent(ctx, size, &riid, &intent_size, &cookie)) {
 		if (!(tx_flags & GLINK_TX_REQ_INTENT)) {
 			/* no rx intent available */
 			GLINK_ERR_CH(ctx,
