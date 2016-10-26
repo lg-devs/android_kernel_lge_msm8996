@@ -89,7 +89,6 @@
 			reusable;
 			alignment = <0 0x400000>;
 			size = <0 0x7000000>;
-			status = "disabled";
 		};
 
 		qseecom_mem: qseecom_region@0 {
@@ -1769,6 +1768,7 @@
 			#size-cells = <0>;
 
 			qcom,speed-bin = <0>;
+			qcom,initial-pwrlevel = <3>;
 
 			/* TURBO */
 			qcom,gpu-pwrlevel@0 {
@@ -1830,6 +1830,7 @@
 			#size-cells = <0>;
 
 			qcom,speed-bin = <1>;
+			qcom,initial-pwrlevel = <3>;
 
 			/* TURBO */
 			qcom,gpu-pwrlevel@0 {

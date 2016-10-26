@@ -2638,13 +2638,6 @@ static int cnss_powerup(const struct subsys_desc *subsys)
 
 	msleep(POWER_ON_DELAY);
 	cnss_configure_wlan_en_gpio(WLAN_EN_HIGH);
-	/**
-	 *  Some platforms have wifi and other PCIE card attached with PCIE
-	 *  switch on the same RC like P5459 board(ROME 3.2 PCIE card + Ethernet
-	 *  PCI), it will need extra time to stable the signals when do SSR,
-	 *  otherwise fail to create the PCIE link, so add PCIE_SWITCH_DELAY.
-	 */
-	msleep(PCIE_SWITCH_DELAY);
 
 	if (!pdev) {
 		pr_err("%d: invalid pdev\n", __LINE__);

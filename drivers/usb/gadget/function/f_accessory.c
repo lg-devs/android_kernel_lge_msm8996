@@ -448,11 +448,8 @@ static void acc_hid_close(struct hid_device *hid)
 {
 }
 
-static int acc_hid_raw_request(struct hid_device *hid,
-					unsigned char report_num,
-					__u8 *buf, size_t len,
-					unsigned char rtype,
-					int reqtype)
+static int acc_hid_raw_request(struct hid_device *hid, unsigned char reportnum,
+	__u8 *buf, size_t len, unsigned char rtype, int reqtype)
 {
 	return 0;
 }
