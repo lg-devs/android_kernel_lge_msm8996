@@ -747,8 +747,10 @@ static int dwc3_ep_trbs_show(struct seq_file *s, void *unused)
 
 	spin_lock_irqsave(&dwc->lock, flags);
 	dep = dwc->eps[ep_num];
-	if (!dep->trb_pool)
+	if (!dep->trb_pool) {
+		spin_unlock_irqrestore(&dwc->lock, flags);
 		return 0;
+	}
 
 	seq_printf(s, "%s trb pool: flags:0x%x freeslot:%d busyslot:%d\n",
 		dep->name, dep->flags, dep->free_slot, dep->busy_slot);
@@ -1066,7 +1068,12 @@ int dwc3_debugfs_init(struct dwc3 *dwc)
 {
 	struct dentry		*root;
 	struct dentry		*file;
-	int			ret;
+
+	if (count >= DWC_CTRL_COUNT) {
+		dev_err(dwc->dev, "Err dwc instance %d >= %d available\n",
+				count, DWC_CTRL_COUNT);
+		return -EINVAL;
+	}
 
 	if (count >= DWC_CTRL_COUNT) {
 		dev_err(dwc->dev, "Err dwc instance %d >= %d available\n",
@@ -1077,15 +1084,14 @@ int dwc3_debugfs_init(struct dwc3 *dwc)
 
 	root = debugfs_create_dir(dev_name(dwc->dev), NULL);
 	if (!root) {
-		ret = -ENOMEM;
-		goto err0;
+		dev_err(dwc->dev, "Can't create debugfs root\n");
+		return -ENOMEM;
 	}
 
 	dwc->root = root;
 
 	dwc->regset = kzalloc(sizeof(*dwc->regset), GFP_KERNEL);
 	if (!dwc->regset) {
-		ret = -ENOMEM;
 		goto err1;
 	}
 
@@ -1095,7 +1101,7 @@ int dwc3_debugfs_init(struct dwc3 *dwc)
 
 	file = debugfs_create_regset32("regdump", S_IRUGO, root, dwc->regset);
 	if (!file) {
-		ret = -ENOMEM;
+		dev_dbg(dwc->dev, "Can't create debugfs regdump\n");
 		goto err1;
 	}
 
@@ -1103,7 +1109,7 @@ int dwc3_debugfs_init(struct dwc3 *dwc)
 		file = debugfs_create_file("mode", S_IRUGO | S_IWUSR, root,
 				dwc, &dwc3_mode_fops);
 		if (!file) {
-			ret = -ENOMEM;
+			dev_dbg(dwc->dev, "Can't create debugfs mode\n");
 			goto err1;
 		}
 	}
@@ -1113,14 +1119,14 @@ int dwc3_debugfs_init(struct dwc3 *dwc)
 		file = debugfs_create_file("testmode", S_IRUGO | S_IWUSR, root,
 				dwc, &dwc3_testmode_fops);
 		if (!file) {
-			ret = -ENOMEM;
+			dev_dbg(dwc->dev, "Can't create debugfs testmode\n");
 			goto err1;
 		}
 
 		file = debugfs_create_file("link_state", S_IRUGO | S_IWUSR, root,
 				dwc, &dwc3_link_state_fops);
 		if (!file) {
-			ret = -ENOMEM;
+			dev_dbg(dwc->dev, "Can't create debugfs linkstate\n");
 			goto err1;
 		}
 	}
@@ -1128,28 +1134,28 @@ int dwc3_debugfs_init(struct dwc3 *dwc)
 	file = debugfs_create_file("trbs", S_IRUGO | S_IWUSR, root,
 			dwc, &dwc3_ep_trb_list_fops);
 	if (!file) {
-		ret = -ENOMEM;
+		dev_dbg(dwc->dev, "Can't create debugfs trbs\n");
 		goto err1;
 	}
 
 	file = debugfs_create_file("requests", S_IRUGO | S_IWUSR, root,
 			dwc, &dwc3_ep_req_list_fops);
 	if (!file) {
-		ret = -ENOMEM;
+		dev_dbg(dwc->dev, "Can't create debugfs requests\n");
 		goto err1;
 	}
 
 	file = debugfs_create_file("queued_reqs", S_IRUGO | S_IWUSR, root,
 			dwc, &dwc3_ep_req_queued_fops);
 	if (!file) {
-		ret = -ENOMEM;
+		dev_dbg(dwc->dev, "Can't create debugfs queued_reqs\n");
 		goto err1;
 	}
 
 	file = debugfs_create_file("int_events", S_IRUGO | S_IWUSR, root,
 			dwc, &dwc3_gadget_dbg_events_fops);
 	if (!file) {
-		ret = -ENOMEM;
+		dev_dbg(dwc->dev, "Can't create debugfs int_events\n");
 		goto err1;
 	}
 
@@ -1168,9 +1174,7 @@ err1:
 	kfree(dwc->regset);
 	dwc->regset = NULL;
 	debugfs_remove_recursive(root);
-
-err0:
-	return ret;
+	return -ENOMEM;
 }
 
 void dwc3_debugfs_exit(struct dwc3 *dwc)

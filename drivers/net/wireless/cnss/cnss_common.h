@@ -13,7 +13,6 @@
 #ifndef _NET_CNSS_COMMON_H_
 #define _NET_CNSS_COMMON_H_
 
-#define MAX_FIRMWARE_SIZE (1 * 1024 * 1024)
 /* max 20mhz channel count */
 #define CNSS_MAX_CH_NUM		45
 
@@ -41,4 +40,5 @@ int cnss_sdio_power_up(struct device *dev);
 int cnss_sdio_power_down(struct device *dev);
 int cnss_pcie_power_up(struct device *dev);
 int cnss_pcie_power_down(struct device *dev);
+const char *cnss_wlan_get_evicted_data_file(void);
 #endif /* _NET_CNSS_COMMON_H_ */

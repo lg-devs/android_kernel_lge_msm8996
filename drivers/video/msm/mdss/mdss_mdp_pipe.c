@@ -2560,7 +2560,8 @@ static int mdss_mdp_set_ts_pipe(struct mdss_mdp_pipe *pipe)
 	__get_ordered_rects(pipe, &low_pipe, &high_pipe);
 
 	ts_count_low  = __get_ts_count(low_pipe, mixer, true);
-	ts_count_high = __get_ts_count(high_pipe, mixer, false);
+	if (high_pipe != NULL)
+		ts_count_high = __get_ts_count(high_pipe, mixer, false);
 	ts_bytes = __get_ts_bytes(pipe, mixer);
 
 	if (low_pipe->multirect.num == MDSS_MDP_PIPE_RECT0) {
@@ -2729,7 +2730,7 @@ int mdss_mdp_pipe_queue_data(struct mdss_mdp_pipe *pipe,
 	mdss_mdp_pipe_write(pipe, MDSS_MDP_REG_SSPP_MULTI_REC_OP_MODE,
 			    multirect_opmode);
 	if (src_data == NULL) {
-		pr_debug("src_data=%p pipe num=%dx\n",
+		pr_debug("src_data=%pK pipe num=%dx\n",
 				src_data, pipe->num);
 		goto update_nobuf;
 	}

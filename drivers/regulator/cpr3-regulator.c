@@ -1011,7 +1011,8 @@ static int cpr3_controller_program_sdelta(struct cpr3_controller *ctrl)
 		max_core_count << CPR4_MARGIN_ADJ_CTL_MAX_NUM_CORES_SHIFT
 		| ((sdelta->allow_core_count_adj || sdelta->allow_boost)
 			? CPR4_MARGIN_ADJ_CTL_CORE_ADJ_EN : 0)
-		| ((sdelta->allow_temp_adj && ctrl->supports_hw_closed_loop)
+		| ((sdelta->allow_temp_adj && ctrl->supports_hw_closed_loop
+			&& sdelta->allow_core_count_adj)
 			? CPR4_MARGIN_ADJ_CTL_TEMP_ADJ_EN : 0)
 		| (((ctrl->use_hw_closed_loop && !sdelta->allow_boost)
 		    || !ctrl->supports_hw_closed_loop)
@@ -5890,14 +5891,11 @@ static int cpr3_panic_callback(struct notifier_block *nfb,
 				struct cpr3_controller, panic_notifier);
 	struct cpr3_panic_regs_info *regs_info = ctrl->panic_regs_info;
 	struct cpr3_reg_info *reg;
-	void __iomem *virt_addr;
 	int i = 0;
 
 	for (i = 0; i < regs_info->reg_count; i++) {
 		reg = &(regs_info->regs[i]);
-		virt_addr = ioremap(reg->addr, 0x4);
-		reg->value = readl_relaxed(virt_addr);
-		iounmap(virt_addr);
+		reg->value = readl_relaxed(reg->virt_addr);
 		pr_err("%s[0x%08x] = 0x%08x\n", reg->name, reg->addr,
 			reg->value);
 	}

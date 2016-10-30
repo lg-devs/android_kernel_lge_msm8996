@@ -135,6 +135,31 @@
 			};
 		};
 
+		pmx_sdc1_cd {
+			pmx_sdc1_cd_on: cd_on {
+				mux {
+					pins = "gpio81";
+					function = "gpio";
+				};
+				config {
+					pins = "gpio81";
+					drive-strength = <2>;
+					bias-pull-up;
+				};
+			};
+			pmx_sdc1_cd_off: cd_off {
+				mux {
+					pins = "gpio81";
+					function = "gpio";
+				};
+				config {
+					pins = "gpio81";
+					drive-strength = <2>;
+					bias-disable;
+				};
+			};
+		};
+
 		/* blsp_spi1_groups */
 
 		spi0_default: spi0_default {
@@ -1503,7 +1528,7 @@
 
 		/* cnss_pmux */
 		cnss_pmux {
-			cnss_default: default {
+			cnss_wlan_en_active: cnss_wlan_en_active {
 				mux {
 					pins = "gpio95";
 					function = "gpio";
@@ -1511,10 +1536,22 @@
 
 				config {
 					pins = "gpio95";
-					function = "gpio";
 					drive-strength = <16>;
 					output-high;
 					bias-pull-up;
+				};
+			};
+			cnss_wlan_en_sleep: cnss_wlan_en_sleep {
+				mux {
+					pins = "gpio95";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio95";
+					drive-strength = <2>;
+					output-low;
+					bias-pull-down;
 				};
 			};
 		};
