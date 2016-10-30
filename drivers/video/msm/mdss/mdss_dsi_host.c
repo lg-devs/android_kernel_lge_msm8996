@@ -34,6 +34,11 @@
 #define DMA_TX_TIMEOUT 200
 #define DMA_TPG_FIFO_LEN 64
 
+#if defined(CONFIG_LGE_DISPLAY_COMMON)
+extern int panel_not_connected;
+extern int skip_lcd_error_check;
+#endif
+
 #define FIFO_STATUS	0x0C
 #define LANE_STATUS	0xA8
 
@@ -2969,6 +2974,13 @@ static bool mdss_dsi_fifo_status(struct mdss_dsi_ctrl_pdata *ctrl)
 
 		pr_err("%s: status=%x\n", __func__, status);
 
+#if defined(CONFIG_LGE_DISPLAY_COMMON)
+		if(skip_lcd_error_check){
+			ctrl->err_cont.fifo_err_cnt++;
+			return false;
+		}
+#endif
+
 		if (status & 0x44440000) {/* DLNx_HS_FIFO_OVERFLOW */
 			dsi_send_events(ctrl, DSI_EV_DLNx_FIFO_OVERFLOW, 0);
 			/* Ignore FIFO EMPTY when overflow happens */
@@ -3105,6 +3117,11 @@ irqreturn_t mdss_dsi_isr(int irq, void *ptr)
 
 	pr_debug("%s: ndx=%d isr=%x\n", __func__, ctrl->ndx, isr);
 
+	if (isr & DSI_INTR_ERROR) {
+		MDSS_XLOG(ctrl->ndx, ctrl->mdp_busy, isr, 0x97);
+		mdss_dsi_error(ctrl);
+	}
+
 	if (isr & DSI_INTR_BTA_DONE) {
 		MDSS_XLOG(ctrl->ndx, ctrl->mdp_busy, isr, 0x96);
 		spin_lock(&ctrl->mdp_lock);
@@ -3127,11 +3144,6 @@ irqreturn_t mdss_dsi_isr(int irq, void *ptr)
 			mdss_dsi_set_reg(ctrl, 0x0c, 0x44440000, 0x44440000);
 		}
 		spin_unlock(&ctrl->mdp_lock);
-	}
-
-	if (isr & DSI_INTR_ERROR) {
-		MDSS_XLOG(ctrl->ndx, ctrl->mdp_busy, isr, 0x97);
-		mdss_dsi_error(ctrl);
 	}
 
 	if (isr & DSI_INTR_VIDEO_DONE) {

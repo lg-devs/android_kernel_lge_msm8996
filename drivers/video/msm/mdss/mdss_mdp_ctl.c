@@ -28,6 +28,10 @@
 #include "mdss_mdp_trace.h"
 #include "mdss_debug.h"
 
+#if defined(CONFIG_LGE_DISPLAY_AOD_SUPPORTED)
+#include "lge/lge_mdss_aod.h"
+#endif
+
 #define MDSS_MDP_QSEED3_VER_DOWNSCALE_LIM 2
 #define NUM_MIXERCFG_REGS 3
 #define MDSS_MDP_WB_OUTPUT_BPP	3
@@ -5218,8 +5222,13 @@ int mdss_mdp_ctl_update_fps(struct mdss_mdp_ctl *ctl)
 		(pinfo->dfps_update == DFPS_IMMEDIATE_PORCH_UPDATE_MODE_HFP) ||
 		(pinfo->dfps_update ==
 			DFPS_IMMEDIATE_MULTI_UPDATE_MODE_CLK_HFP) ||
+		(pinfo->dfps_update ==
+			DFPS_IMMEDIATE_MULTI_MODE_HFP_CALC_CLK) ||
 		pinfo->dfps_update == DFPS_IMMEDIATE_CLK_UPDATE_MODE) {
-		new_fps = mdss_panel_get_framerate(pinfo);
+		if (pinfo->type == DTV_PANEL)
+			new_fps = pinfo->lcdc.frame_rate;
+		else
+			new_fps = mdss_panel_get_framerate(pinfo);
 	} else {
 		new_fps = pinfo->new_fps;
 	}
@@ -5373,7 +5382,13 @@ static void mdss_mdp_force_border_color(struct mdss_mdp_ctl *ctl)
 	if (ctl->mixer_right)
 		ctl->mixer_right->params_changed++;
 }
-
+#if (defined CONFIG_LGE_PM_TRITON)
+#include <linux/lib_triton.h>
+#ifdef FPS_BOOST
+u64 last_commit_ms;
+EXPORT_SYMBOL(last_commit_ms);
+#endif
+#endif
 int mdss_mdp_display_commit(struct mdss_mdp_ctl *ctl, void *arg,
 	struct mdss_mdp_commit_cb *commit_cb)
 {
@@ -5474,7 +5489,7 @@ int mdss_mdp_display_commit(struct mdss_mdp_ctl *ctl, void *arg,
 		mdss_mdp_ctl_split_display_enable(split_lm_valid, ctl, sctl);
 
 	ATRACE_BEGIN("postproc_programming");
-	if (ctl->mfd && ctl->mfd->dcm_state != DTM_ENTER)
+	if (ctl->is_video_mode && ctl->mfd && ctl->mfd->dcm_state != DTM_ENTER)
 		/* postprocessing setup, including dspp */
 		mdss_mdp_pp_setup_locked(ctl);
 
@@ -5520,6 +5535,24 @@ int mdss_mdp_display_commit(struct mdss_mdp_ctl *ctl, void *arg,
 	if (ctl->ops.wait_pingpong && !mdata->serialize_wait4pp)
 		mdss_mdp_display_wait4pingpong(ctl, false);
 
+	/* Moved pp programming to post ping pong */
+	if (!ctl->is_video_mode && ctl->mfd &&
+			ctl->mfd->dcm_state != DTM_ENTER) {
+		/* postprocessing setup, including dspp */
+		mutex_lock(&ctl->flush_lock);
+		mdss_mdp_pp_setup_locked(ctl);
+		if (sctl) {
+			if (ctl->split_flush_en) {
+				ctl->flush_bits |= sctl->flush_bits;
+				sctl->flush_bits = 0;
+				sctl_flush_bits = 0;
+			} else {
+				sctl_flush_bits = sctl->flush_bits;
+			}
+		}
+		ctl_flush_bits = ctl->flush_bits;
+		mutex_unlock(&ctl->flush_lock);
+	}
 	/*
 	 * if serialize_wait4pp is false then roi_bkup used in wait4pingpong
 	 * will be of previous frame as expected.
@@ -5640,6 +5673,9 @@ int mdss_mdp_display_commit(struct mdss_mdp_ctl *ctl, void *arg,
 		pr_warn("ctl %d error displaying frame\n", ctl->num);
 
 	ctl->play_cnt++;
+#if (defined CONFIG_LGE_PM_TRITON && defined FPS_BOOST)
+	last_commit_ms = ktime_to_ms(ktime_get());
+#endif
 	ATRACE_END("flush_kickoff");
 
 done:

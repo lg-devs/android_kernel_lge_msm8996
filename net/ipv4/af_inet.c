@@ -104,6 +104,9 @@
 #include <net/ip_fib.h>
 #include <net/inet_connection_sock.h>
 #include <net/tcp.h>
+#ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
+#include <net/mptcp.h>
+#endif
 #include <net/udp.h>
 #include <net/udplite.h>
 #include <net/ping.h>
@@ -161,6 +164,11 @@ void inet_sock_destruct(struct sock *sk)
 		pr_err("Attempt to release alive inet socket %p\n", sk);
 		return;
 	}
+
+	#ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
+	if (sock_flag(sk, SOCK_MPTCP))
+		mptcp_disable_static_key();
+	#endif
 
 	WARN_ON(atomic_read(&sk->sk_rmem_alloc));
 	WARN_ON(atomic_read(&sk->sk_wmem_alloc));
@@ -262,9 +270,12 @@ EXPORT_SYMBOL(inet_listen);
 /*
  *	Create an inet socket.
  */
-
+#ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
+int inet_create(struct net *net, struct socket *sock, int protocol, int kern)
+#else
 static int inet_create(struct net *net, struct socket *sock, int protocol,
-		       int kern)
+                      int kern)
+#endif
 {
 	struct sock *sk;
 	struct inet_protosw *answer;
@@ -694,6 +705,23 @@ int inet_accept(struct socket *sock, struct socket *newsock, int flags)
 	lock_sock(sk2);
 
 	sock_rps_record_flow(sk2);
+#ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
+	if (sk2->sk_protocol == IPPROTO_TCP && mptcp(tcp_sk(sk2))) {
+		struct sock *sk_it = sk2;
+
+		mptcp_for_each_sk(tcp_sk(sk2)->mpcb, sk_it)
+			sock_rps_record_flow(sk_it);
+
+		if (tcp_sk(sk2)->mpcb->master_sk) {
+			sk_it = tcp_sk(sk2)->mpcb->master_sk;
+
+			write_lock_bh(&sk_it->sk_callback_lock);
+			sk_it->sk_wq = newsock->wq;
+			sk_it->sk_socket = newsock;
+			write_unlock_bh(&sk_it->sk_callback_lock);
+		}
+	}
+#endif
 	WARN_ON(!((1 << sk2->sk_state) &
 		  (TCPF_ESTABLISHED | TCPF_SYN_RECV |
 		  TCPF_CLOSE_WAIT | TCPF_CLOSE)));
@@ -1353,6 +1381,7 @@ static struct sk_buff **inet_gro_receive(struct sk_buff **head,
 
 	for (p = *head; p; p = p->next) {
 		struct iphdr *iph2;
+		u16 flush_id;
 
 		if (!NAPI_GRO_CB(p)->same_flow)
 			continue;
@@ -1376,14 +1405,24 @@ static struct sk_buff **inet_gro_receive(struct sk_buff **head,
 			(iph->tos ^ iph2->tos) |
 			((iph->frag_off ^ iph2->frag_off) & htons(IP_DF));
 
-		/* Save the IP ID check to be included later when we get to
-		 * the transport layer so only the inner most IP ID is checked.
-		 * This is because some GSO/TSO implementations do not
-		 * correctly increment the IP ID for the outer hdrs.
-		 */
-		NAPI_GRO_CB(p)->flush_id =
-			    ((u16)(ntohs(iph2->id) + NAPI_GRO_CB(p)->count) ^ id);
 		NAPI_GRO_CB(p)->flush |= flush;
+
+		/* We must save the offset as it is possible to have multiple
+		 * flows using the same protocol and address pairs so we
+		 * need to wait until we can validate this is part of the
+		 * same flow with a 5-tuple or better to avoid unnecessary
+		 * collisions between flows.  We can support one of two
+		 * possible scenarios, either a fixed value with DF bit set
+		 * or an incrementing value with DF either set or unset.
+		 * In the case of a fixed value we will end up losing the
+		 * data that the IP ID was a fixed value, however per RFC
+		 * 6864 in such a case the actual value of the IP ID is
+		 * meant to be ignored anyway.
+		 */
+		flush_id = (u16)(id - ntohs(iph2->id));
+		if (flush_id || !(iph2->frag_off & htons(IP_DF)))
+			NAPI_GRO_CB(p)->flush_id |= flush_id ^
+						    NAPI_GRO_CB(p)->count;
 	}
 
 	NAPI_GRO_CB(skb)->flush |= flush;
@@ -1761,7 +1800,10 @@ static int __init inet_init(void)
 	 */
 
 	ip_init();
-
+#ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
+	/* We must initialize MPTCP before TCP. */
+	mptcp_init();
+#endif
 	tcp_v4_init();
 
 	/* Setup TCP slab cache for open requests. */
